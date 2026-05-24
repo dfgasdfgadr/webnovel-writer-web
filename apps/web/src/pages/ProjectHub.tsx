@@ -110,12 +110,14 @@ export function ProjectHub() {
           </p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="size-4 mr-2" />
-              新建项目
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button>
+                <Plus className="size-4 mr-2" />
+                新建项目
+              </Button>
+            }
+          />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>新建项目</DialogTitle>
@@ -186,15 +188,17 @@ export function ProjectHub() {
                     </CardTitle>
                   </Link>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <MoreVertical className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="size-4" />
+                        </Button>
+                      }
+                    />
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => deleteMutation.mutate(project.id)}>
                         <Trash2 className="size-4 mr-2 text-destructive" />

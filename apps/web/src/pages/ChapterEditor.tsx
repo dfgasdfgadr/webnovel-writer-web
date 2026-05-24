@@ -159,12 +159,14 @@ export function ChapterEditor() {
         </ScrollArea>
         <div className="p-2 border-t">
           <Dialog open={isNewChapterOpen} onOpenChange={setIsNewChapterOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="w-full justify-start">
-                <Plus className="size-3 mr-1" />
-                新建章节
-              </Button>
-            </DialogTrigger>
+            <DialogTrigger
+              render={
+                <Button variant="ghost" size="sm" className="w-full justify-start">
+                  <Plus className="size-3 mr-1" />
+                  新建章节
+                </Button>
+              }
+            />
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>新建章节</DialogTitle>

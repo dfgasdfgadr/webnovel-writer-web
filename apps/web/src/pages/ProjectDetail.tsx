@@ -129,12 +129,14 @@ export function ProjectDetail() {
           )}
         </div>
         <Dialog open={isNewChapterOpen} onOpenChange={setIsNewChapterOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="size-4 mr-2" />
-              新建章节
-            </Button>
-          </DialogTrigger>
+          <DialogTrigger
+            render={
+              <Button>
+                <Plus className="size-4 mr-2" />
+                新建章节
+              </Button>
+            }
+          />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>新建章节</DialogTitle>
