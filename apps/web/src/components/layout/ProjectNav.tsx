@@ -1,8 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { FileText, FlaskConical, Network } from "lucide-react";
+import { FileText, FlaskConical, Network, Map } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ProjectNavTab = "chapters" | "simulations" | "graph";
+export type ProjectNavTab = "chapters" | "planning" | "simulations" | "graph";
 
 interface ProjectNavProps {
   projectId: string;
@@ -17,11 +17,13 @@ const tabs: Array<{
   icon: typeof FileText;
 }> = [
   { id: "chapters", label: "章节", suffix: "", icon: FileText },
+  { id: "planning", label: "规划中心", suffix: "/planning", icon: Map },
   { id: "simulations", label: "推演中心", suffix: "/simulations", icon: FlaskConical },
   { id: "graph", label: "关系图谱", suffix: "/graph", icon: Network },
 ];
 
 export function resolveProjectNavTab(pathname: string): ProjectNavTab {
+  if (pathname.includes("/planning")) return "planning";
   if (pathname.includes("/simulations")) return "simulations";
   if (pathname.includes("/graph")) return "graph";
   return "chapters";

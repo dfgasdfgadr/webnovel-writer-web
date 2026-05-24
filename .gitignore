@@ -42,6 +42,10 @@ apps/api/uploads/
 # SQLite databases
 *.db
 
+# Generated story data
+.novelcraft/
+.story-system/
+
 # Test artifacts
 coverage/
 .coverage

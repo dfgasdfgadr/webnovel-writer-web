@@ -14,6 +14,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { GraphView } from "@/pages/GraphView";
 import { SimulationCenter } from "@/pages/SimulationCenter";
 import { ReviewPage } from "@/pages/ReviewPage";
+import { PlanningCenter } from "@/pages/PlanningCenter";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,6 +67,7 @@ export default function App() {
                 <Route path="/" element={<ProjectHub />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectDetail />} />
+                <Route path="/projects/:projectId/planning" element={<PlanningCenter />} />
                 <Route path="/projects/:projectId/graph" element={<GraphView />} />
                 <Route path="/projects/:projectId/simulations" element={<SimulationCenter />} />
                 <Route

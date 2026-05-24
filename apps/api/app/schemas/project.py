@@ -12,6 +12,7 @@ class ProjectUpdate(BaseModel):
     description: str | None = None
     genre: str | None = None
     status: str | None = None
+    synopsis_json: str | None = None
 
 
 class ProjectPublic(BaseModel):
@@ -21,6 +22,7 @@ class ProjectPublic(BaseModel):
     genre: str | None
     status: str
     owner_id: str
+    synopsis_json: str | None = None
     created_at: str
     updated_at: str
 

@@ -36,8 +36,82 @@ export interface ProjectPublic {
   owner_id: string;
   volume_label?: string | null;
   root_dir?: string | null;
+  synopsis_json?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface SynopsisRequest {
+  genre: string;
+  hook: string;
+  protagonist: Record<string, unknown>;
+  world_building: Record<string, unknown>;
+  power_system: string;
+}
+
+export interface SynopsisResponse {
+  title: string;
+  genre: string;
+  hook: string;
+  synopsis: string;
+  volumes: Array<{
+    num: number;
+    title: string;
+    summary: string;
+    target_chapters: number;
+  }>;
+}
+
+export interface OutlineRequest {
+  volume: Record<string, unknown>;
+  chapter_num: number;
+  synopsis?: Record<string, unknown>;
+}
+
+export interface OutlineResponse {
+  chapter_num: number;
+  title: string;
+  outline: string;
+  must_cover_nodes: string[];
+  forbidden_zones: string[];
+  key_characters: Array<{ name: string; role_in_chapter: string }>;
+  target_words: number;
+}
+
+export interface BatchOutlineRequest {
+  volume: Record<string, unknown>;
+  start_chapter: number;
+  end_chapter: number;
+  synopsis?: Record<string, unknown>;
+}
+
+export interface BatchOutlineResponse {
+  total: number;
+  completed: number;
+  failed: number;
+  results: Array<{
+    chapter_num: number;
+    success: boolean;
+    data?: OutlineResponse;
+    error?: string;
+  }>;
+}
+
+export interface VolumePlanRequest {
+  synopsis: Record<string, unknown>;
+  total_chapters: number;
+  chapters_per_volume: number;
+}
+
+export interface VolumePlanResponse {
+  total_volumes: number;
+  volumes: Array<{
+    num: number;
+    title: string;
+    summary: string;
+    target_chapters: number;
+    chapters?: Array<OutlineResponse>;
+  }>;
 }
 
 export interface ProjectCreate {

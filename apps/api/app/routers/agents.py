@@ -1,6 +1,7 @@
 """Agent pipeline endpoints — pipeline trigger, SSE streaming, review results, architect, search."""
 
 import json
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -15,8 +16,10 @@ from app.services.auth import get_current_user
 from app.config import settings
 from app.pipeline import WritingPipeline
 from app.agents.architect import ArchitectAgent
+from app.agents.llm import LLMProvider
 from app.search import SearchIndex
 
+logger = logging.getLogger("novelcraft.agents")
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 
 
@@ -33,6 +36,20 @@ class SynopsisRequest(BaseModel):
 class OutlineRequest(BaseModel):
     volume: dict = {}
     chapter_num: int = 1
+    synopsis: dict = {}
+
+
+class BatchOutlineRequest(BaseModel):
+    volume: dict = {}
+    start_chapter: int = 1
+    end_chapter: int = 1
+    synopsis: dict = {}
+
+
+class VolumePlanRequest(BaseModel):
+    synopsis: dict = {}
+    total_chapters: int = 100
+    chapters_per_volume: int = 50
 
 
 class RunPipelineRequest(BaseModel):
@@ -76,13 +93,23 @@ async def generate_synopsis(
     project = await db.get(Project, project_id)
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    architect = ArchitectAgent()
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    architect = ArchitectAgent(llm=llm)
     result = await architect.synopsis({
         "genre": body.genre, "hook": body.hook,
         "protagonist": body.protagonist,
         "world_building": body.world_building,
         "power_system": body.power_system,
     })
+
+    # Persist synopsis to project
+    try:
+        project.synopsis_json = json.dumps(result, ensure_ascii=False)
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to persist synopsis for project %s", project_id)
+
     return result
 
 
@@ -96,12 +123,204 @@ async def generate_outline(
     project = await db.get(Project, project_id)
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    architect = ArchitectAgent()
+
+    synopsis = body.synopsis
+    if not synopsis and project.synopsis_json:
+        try:
+            synopsis = json.loads(project.synopsis_json)
+        except json.JSONDecodeError:
+            synopsis = {}
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    architect = ArchitectAgent(llm=llm)
     result = await architect.chapter_outline(
-        synopsis={}, volume=body.volume,
+        synopsis=synopsis, volume=body.volume,
         chapter_num=body.chapter_num, prev_summaries=None,
     )
+
+    # Persist outline to chapter (auto-create if needed)
+    try:
+        existing = (
+            await db.execute(
+                select(Chapter).where(
+                    Chapter.project_id == project_id,
+                    Chapter.number == body.chapter_num,
+                )
+            )
+        ).scalar_one_or_none()
+
+        if existing:
+            existing.outline = result.get("outline", json.dumps(result, ensure_ascii=False))
+            if result.get("title") and not existing.title.startswith("第"):
+                existing.title = result["title"]
+        else:
+            chapter = Chapter(
+                project_id=project_id,
+                title=result.get("title", f"第{body.chapter_num}章"),
+                number=body.chapter_num,
+                content="",
+                outline=result.get("outline", json.dumps(result, ensure_ascii=False)),
+            )
+            db.add(chapter)
+        await db.commit()
+    except Exception:
+        logger.exception("Failed to persist outline for chapter %d in project %s", body.chapter_num, project_id)
+
     return result
+
+
+@router.post("/architect/outline/{project_id}/batch")
+async def generate_batch_outlines(
+    project_id: str,
+    body: BatchOutlineRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if body.start_chapter < 1 or body.end_chapter < body.start_chapter:
+        raise HTTPException(status_code=400, detail="Invalid chapter range")
+
+    synopsis = body.synopsis
+    if not synopsis and project.synopsis_json:
+        try:
+            synopsis = json.loads(project.synopsis_json)
+        except json.JSONDecodeError:
+            synopsis = {}
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    architect = ArchitectAgent(llm=llm)
+
+    results = []
+    completed = 0
+    failed = 0
+
+    for ch_num in range(body.start_chapter, body.end_chapter + 1):
+        try:
+            result = await architect.chapter_outline(
+                synopsis=synopsis, volume=body.volume,
+                chapter_num=ch_num, prev_summaries=None,
+            )
+
+            existing = (
+                await db.execute(
+                    select(Chapter).where(
+                        Chapter.project_id == project_id,
+                        Chapter.number == ch_num,
+                    )
+                )
+            ).scalar_one_or_none()
+
+            if existing:
+                existing.outline = result.get("outline", json.dumps(result, ensure_ascii=False))
+                if result.get("title") and not existing.title.startswith("第"):
+                    existing.title = result["title"]
+            else:
+                chapter = Chapter(
+                    project_id=project_id,
+                    title=result.get("title", f"第{ch_num}章"),
+                    number=ch_num,
+                    content="",
+                    outline=result.get("outline", json.dumps(result, ensure_ascii=False)),
+                )
+                db.add(chapter)
+            await db.commit()
+
+            results.append({"chapter_num": ch_num, "success": True, "data": result})
+            completed += 1
+        except Exception as e:
+            logger.exception("Batch outline: chapter %d failed", ch_num)
+            await db.rollback()
+            results.append({"chapter_num": ch_num, "success": False, "error": str(e)})
+            failed += 1
+
+    return {"total": body.end_chapter - body.start_chapter + 1, "completed": completed, "failed": failed, "results": results}
+
+
+@router.post("/architect/volume-plan/{project_id}")
+async def generate_volume_plan(
+    project_id: str,
+    body: VolumePlanRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a rolling volume plan: detailed outlines for first 2 volumes, skeleton for rest."""
+    project = await db.get(Project, project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    synopsis = body.synopsis
+    if not synopsis and project.synopsis_json:
+        try:
+            synopsis = json.loads(project.synopsis_json)
+        except json.JSONDecodeError:
+            synopsis = {}
+
+    total_chapters = body.total_chapters
+    chapters_per_volume = body.chapters_per_volume
+    total_volumes = max(1, (total_chapters + chapters_per_volume - 1) // chapters_per_volume)
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    architect = ArchitectAgent(llm=llm)
+
+    volumes = []
+    for vol_num in range(1, total_volumes + 1):
+        start_ch = (vol_num - 1) * chapters_per_volume + 1
+        end_ch = min(vol_num * chapters_per_volume, total_chapters)
+        is_detailed = vol_num <= 2
+
+        volume_info = {
+            "num": vol_num,
+            "title": synopsis.get("volumes", [{}])[vol_num - 1].get("title", f"第{vol_num}卷") if isinstance(synopsis.get("volumes"), list) and len(synopsis.get("volumes", [])) >= vol_num else f"第{vol_num}卷",
+            "summary": synopsis.get("volumes", [{}])[vol_num - 1].get("summary", f"第{vol_num}卷内容，章节 {start_ch}-{end_ch}") if isinstance(synopsis.get("volumes"), list) and len(synopsis.get("volumes", [])) >= vol_num else f"第{vol_num}卷内容，章节 {start_ch}-{end_ch}",
+            "target_chapters": end_ch - start_ch + 1,
+            "chapters": [],
+        }
+
+        if is_detailed:
+            # Generate detailed chapter outlines for first 2 volumes
+            for ch_num in range(start_ch, end_ch + 1):
+                try:
+                    result = await architect.chapter_outline(
+                        synopsis=synopsis, volume={"num": vol_num, "title": volume_info["title"], "summary": volume_info["summary"]},
+                        chapter_num=ch_num, prev_summaries=None,
+                    )
+
+                    existing = (
+                        await db.execute(
+                            select(Chapter).where(
+                                Chapter.project_id == project_id,
+                                Chapter.number == ch_num,
+                            )
+                        )
+                    ).scalar_one_or_none()
+
+                    if existing:
+                        existing.outline = result.get("outline", "")
+                        if result.get("title"):
+                            existing.title = result["title"]
+                    else:
+                        chapter = Chapter(
+                            project_id=project_id,
+                            title=result.get("title", f"第{ch_num}章"),
+                            number=ch_num,
+                            content="",
+                            outline=result.get("outline", json.dumps(result, ensure_ascii=False)),
+                        )
+                        db.add(chapter)
+                    await db.commit()
+
+                    volume_info["chapters"].append(result)
+                except Exception as e:
+                    logger.exception("Volume plan: chapter %d failed", ch_num)
+                    await db.rollback()
+                    volume_info["chapters"].append({"chapter_num": ch_num, "error": str(e)})
+
+        volumes.append(volume_info)
+
+    return {"total_volumes": total_volumes, "volumes": volumes}
 
 
 # --- Search ---

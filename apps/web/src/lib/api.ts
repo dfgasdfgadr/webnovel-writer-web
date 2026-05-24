@@ -14,6 +14,14 @@ import type {
   GraphEdge,
   TimelineItem,
   GraphData,
+  SynopsisRequest,
+  SynopsisResponse,
+  OutlineRequest,
+  OutlineResponse,
+  BatchOutlineRequest,
+  BatchOutlineResponse,
+  VolumePlanRequest,
+  VolumePlanResponse,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -33,6 +41,14 @@ export type {
   GraphEdge,
   TimelineItem,
   GraphData,
+  SynopsisRequest,
+  SynopsisResponse,
+  OutlineRequest,
+  OutlineResponse,
+  BatchOutlineRequest,
+  BatchOutlineResponse,
+  VolumePlanRequest,
+  VolumePlanResponse,
 };
 
 const BASE_URL = "/api/v1";
@@ -202,4 +218,33 @@ export function testLlmConnection(data?: { api_key?: string; base_url?: string; 
 // ---- Graph & Continuity ----
 export function getGraphData(projectId: string) {
   return request<GraphData>(`/agents/graph/${projectId}`);
+}
+
+// ---- Architect (Planning Center) ----
+export function generateSynopsis(projectId: string, data: SynopsisRequest) {
+  return request<SynopsisResponse>(`/agents/architect/synopsis/${projectId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function generateOutline(projectId: string, data: OutlineRequest) {
+  return request<OutlineResponse>(`/agents/architect/outline/${projectId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function generateBatchOutlines(projectId: string, data: BatchOutlineRequest) {
+  return request<BatchOutlineResponse>(`/agents/architect/outline/${projectId}/batch`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function generateVolumePlan(projectId: string, data: VolumePlanRequest) {
+  return request<VolumePlanResponse>(`/agents/architect/volume-plan/${projectId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
