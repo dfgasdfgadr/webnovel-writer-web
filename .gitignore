@@ -39,6 +39,9 @@ apps/api/uploads/
 # Cursor
 .cursor/plans/
 
+# SQLite databases
+*.db
+
 # Test artifacts
 coverage/
 .coverage

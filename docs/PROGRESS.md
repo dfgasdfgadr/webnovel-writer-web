@@ -16,7 +16,7 @@
 
 - [ ] **P0 ChapterEditor 无限重渲染** — Too many re-renders，已派 Claude Code（2026-05-24）
 - [x] ~~**P0 项目列表 500**~~ → 已修复（`app/db/schema.py` + `test_schema.py`）
-- [ ] **Phase 0/1 单元测试补债** — 后端 47 passed，前端 25 passed（api/auth store/LoginPage 全覆盖）
+- [x] ~~**Phase 0/1 单元测试补债**~~ → 72 passed（后端 47 + 前端 25，api/auth store/LoginPage 全覆盖）
 
 ## 最近修复（2026-05-24）
 
@@ -31,6 +31,15 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-24：测试基础设施搭建 + Phase 0 测试补债
+
+- **测试基础设施**：pytest + pytest-asyncio + httpx (API 47 用例) + Vitest + Testing Library (Web 25 用例)
+- **后端测试**：`tests/test_config.py`(12) + `tests/test_auth.py`(10) + `tests/test_projects.py`(9) + `tests/test_chapters.py`(10) + `tests/test_health.py`(1) + `tests/test_schema.py`(4)
+- **前端测试**：`api.test.ts`(6) + `auth.test.ts`(10) + `LoginPage.test.tsx`(9)
+- **测试脚本**：`pnpm test` / `pnpm test:api` / `pnpm test:web` / `pnpm test:coverage`
+- `pnpm test` → 72 passed（后端 47 + 前端 25）
+- `.gitignore` 添加 `*.db` 忽略 SQLite 数据库文件
 
 ### 2026-05-24：P0 Bug Fix — 项目列表 500 + 全量测试补债
 
