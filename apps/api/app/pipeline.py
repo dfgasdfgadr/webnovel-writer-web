@@ -16,6 +16,7 @@ from app.agents import (
     Harness, ContextAgent, WriterAgent, ReviewAgent, DataAgent,
     AgentResult,
 )
+from app.agents.llm import LLMProvider
 from app.models import (
     Chapter, ChapterCommit, ReviewIssue, AgentRun, Entity, Relationship, Foreshadowing,
 )
@@ -41,21 +42,55 @@ class WritingPipeline:
         chapter_id: str,
         project_id: str,
         chapter_num: int,
+        user_id: str | None = None,
+        llm: LLMProvider | None = None,
     ):
         self.db = db
+        self.user_id = user_id
+        self.llm = llm or LLMProvider()
         self.harness = Harness(project_root)
         self.story = StorySystem(project_root)
-        self.context_agent = ContextAgent()
-        self.writer_agent = WriterAgent()
-        self.review_agent = ReviewAgent()
-        self.data_agent = DataAgent()
+        self.context_agent = ContextAgent(llm=self.llm)
+        self.writer_agent = WriterAgent(llm=self.llm)
+        self.review_agent = ReviewAgent(llm=self.llm)
+        self.data_agent = DataAgent(llm=self.llm)
         self.chapter_id = chapter_id
         self.project_id = project_id
         self.chapter_num = chapter_num
 
+    @classmethod
+    async def create(
+        cls,
+        db: AsyncSession,
+        project_root: str,
+        chapter_id: str,
+        project_id: str,
+        chapter_num: int,
+        user_id: str,
+    ) -> "WritingPipeline":
+        llm = await LLMProvider.for_user(user_id, db)
+        return cls(
+            db=db,
+            project_root=project_root,
+            chapter_id=chapter_id,
+            project_id=project_id,
+            chapter_num=chapter_num,
+            user_id=user_id,
+            llm=llm,
+        )
+
+    def ensure_llm_configured(self) -> None:
+        if not (self.llm.api_key or "").strip():
+            raise ValueError("未配置 LLM API Key，请前往设置页配置或在 .env 中设置 LLM_API_KEY")
+
     async def run_full(self, chapter_outline: str) -> PipelineResult:
         """Run the full pipeline: context → draft → review → extract → commit."""
         plr = PipelineResult(success=False)
+        try:
+            self.ensure_llm_configured()
+        except ValueError as e:
+            plr.error = str(e)
+            return plr
 
         contracts = self.story.get_all_contracts_for_writing(self.chapter_num)
         summaries = self.story.get_recent_summaries(self.chapter_num, count=5)
@@ -177,10 +212,13 @@ class WritingPipeline:
         await self.db.flush()
         return result
 
-    async def stream_draft(self, chapter_outline: str) -> AsyncIterator[str]:
+    async def stream_draft(self, chapter_outline: str) -> AsyncIterator[str | dict]:
         """SSE streaming: run context then stream writer output."""
+        self.ensure_llm_configured()
         contracts = self.story.get_all_contracts_for_writing(self.chapter_num)
         summaries = self.story.get_recent_summaries(self.chapter_num, count=5)
+
+        yield {"type": "status", "message": "正在生成写作任务书..."}
 
         ctx_result = await self.context_agent.run(
             chapter_outline=chapter_outline, contracts=contracts, summaries=summaries,
@@ -188,6 +226,10 @@ class WritingPipeline:
         brief = chapter_outline
         if ctx_result.success:
             brief = ctx_result.data.get("brief", chapter_outline)
+        elif ctx_result.error:
+            yield {"type": "status", "message": f"任务书生成跳过：{ctx_result.error}，直接使用章纲"}
+
+        yield {"type": "status", "message": "开始流式写作..."}
 
         async for chunk in self.writer_agent.stream(brief=brief):
-            yield chunk
+            yield {"type": "content", "content": chunk}

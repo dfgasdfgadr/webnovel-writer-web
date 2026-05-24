@@ -76,6 +76,8 @@ class LLMProvider:
         return provider
 
     async def chat(self, messages: list[LLMMessage], temperature: float = 0.7) -> LLMResponse:
+        if not (self.api_key or "").strip():
+            raise ValueError("未配置 LLM API Key")
         body = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -97,6 +99,8 @@ class LLMProvider:
             )
 
     async def chat_stream(self, messages: list[LLMMessage], temperature: float = 0.7) -> AsyncIterator[str]:
+        if not (self.api_key or "").strip():
+            raise ValueError("未配置 LLM API Key")
         body = {
             "model": self.model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],

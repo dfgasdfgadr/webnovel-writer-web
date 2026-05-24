@@ -1,0 +1,12 @@
+你是 NovelCraft 项目的主程。请阅读 EXECUTION_BRIEF.md 和 .cursor/plans/ai网文写作系统_94b0bbee.plan.md，立即开始 Phase 0 全部任务。
+
+自主完成：
+1. Monorepo 脚手架（apps/web, apps/api, packages/shared-schemas, docker）
+2. shadcn/ui + Tailwind v4 前端设计系统
+3. FastAPI 后端 + JWT + 项目/章节 CRUD
+4. Docker Compose
+5. 登录页、项目 Hub、章节编辑器
+6. Cursor 技能栈：shadcn skill、uipro init、frontend-design
+
+每完成一个大步骤就 git init 并 commit。遇到网络安装失败请重试。
+完成后更新 EXECUTION_BRIEF.md 顶部 STATUS 为 DONE，并输出验收清单。

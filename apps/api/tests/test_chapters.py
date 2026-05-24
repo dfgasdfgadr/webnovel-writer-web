@@ -82,6 +82,22 @@ class TestChaptersCRUD:
         assert data["content"] == "新的内容_更多文字"
         assert data["word_count"] > 0
 
+    async def test_update_chapter_outline(self, async_client: AsyncClient, auth_headers: dict):
+        pid = await _create_project(async_client, auth_headers)
+        create_resp = await async_client.post(f"/api/v1/projects/{pid}/chapters", json={
+            "title": "Ch1", "number": 1,
+        }, headers=auth_headers)
+        cid = create_resp.json()["id"]
+
+        resp = await async_client.patch(f"/api/v1/projects/{pid}/chapters/{cid}", json={
+            "outline": "主角进入学院，遇到第一个对手。",
+        }, headers=auth_headers)
+        assert resp.status_code == 200
+        assert resp.json()["outline"] == "主角进入学院，遇到第一个对手。"
+
+        get_resp = await async_client.get(f"/api/v1/projects/{pid}/chapters/{cid}", headers=auth_headers)
+        assert get_resp.json()["outline"] == "主角进入学院，遇到第一个对手。"
+
     async def test_delete_chapter(self, async_client: AsyncClient, auth_headers: dict):
         pid = await _create_project(async_client, auth_headers)
         create_resp = await async_client.post(f"/api/v1/projects/{pid}/chapters", json={

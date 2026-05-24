@@ -1,0 +1,13 @@
+你是 NovelCraft 项目的主程。请先阅读：
+1. .claude-instructions.md（强制规则）
+2. docs/handoffs/PHASE0_HANDOFF.md（上一阶段交接）
+3. .cursor/plans/ai网文写作系统_94b0bbee.plan.md 的 Phase 1 章节
+
+立即开始 Phase 1 全部任务。自主完成，不要等待确认。
+
+Phase 1 完成后必须：
+- 生成 docs/handoffs/PHASE1_HANDOFF.md（按 HANDOFF_TEMPLATE.md 填写，不可省略章节）
+- 更新 CLAUDE.md 当前阶段为 Phase 2
+- 最后一个 git commit 包含交接文档
+
+每完成一个大步骤就 git commit。遇到网络安装失败请重试。

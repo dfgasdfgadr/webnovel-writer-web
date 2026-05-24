@@ -1,0 +1,10 @@
+你是 NovelCraft 唯一执行者。
+
+先读 docs/briefs/PHASE3_EXECUTION_BRIEF.md（Phase 3 执行简报，PM 已签发，STATUS=IN_PROGRESS）。
+再读 docs/handoffs/PHASE2_HANDOFF.md 与 .claude-instructions.md。
+
+启动前：git status 整理 PM 期间未 commit 修复，再按简报建议顺序执行。
+每个功能必须有单元测试，pnpm test 全绿后 git commit。
+Phase 完成：简报 STATUS=DONE + docs/handoffs/PHASE3_HANDOFF.md。
+
+自主完成，不要等待确认。

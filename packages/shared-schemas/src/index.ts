@@ -66,6 +66,7 @@ export interface ChapterPublic {
   title: string;
   number: number;
   content: string;
+  outline: string;
   word_count: number;
   status: string;
   created_at: string;
@@ -77,11 +78,13 @@ export interface ChapterCreate {
   title: string;
   number: number;
   content?: string;
+  outline?: string;
 }
 
 export interface ChapterUpdate {
   title?: string;
   content?: string;
+  outline?: string;
   status?: string;
 }
 

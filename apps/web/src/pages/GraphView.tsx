@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
 import type { GraphNode, GraphEdge, TimelineItem } from "@/lib/api";
 
@@ -60,17 +61,20 @@ export function GraphView() {
   if (!graph || graph.nodes.length === 0) {
     return (
       <div>
-        <div className="flex items-center gap-4 mb-6">
-          <Link to={`/projects/${projectId}`}>
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="size-4 mr-1" />
-              返回项目
-            </Button>
+        <div className="mb-4">
+          <Link
+            to="/"
+            className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2"
+          >
+            <ArrowLeft className="size-3" />
+            项目列表
           </Link>
-          <h1 className="text-2xl font-serif font-semibold tracking-tight">
-            关系图谱
-          </h1>
+          <h1 className="font-serif text-2xl font-semibold">关系图谱</h1>
+          {project && (
+            <p className="text-sm text-muted-foreground mt-1">{project.title}</p>
+          )}
         </div>
+        <ProjectNav projectId={projectId!} active="graph" className="mb-6" />
         <EmptyState
           icon={BookOpen}
           title="暂无实体数据"
@@ -82,21 +86,20 @@ export function GraphView() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link to={`/projects/${projectId}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="size-4 mr-1" />
-            返回项目
-          </Button>
+      <div className="mb-4">
+        <Link
+          to="/"
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-2"
+        >
+          <ArrowLeft className="size-3" />
+          项目列表
         </Link>
-        <h1 className="text-2xl font-serif font-semibold tracking-tight">
-          关系图谱
-        </h1>
+        <h1 className="font-serif text-2xl font-semibold">关系图谱</h1>
         {project && (
-          <span className="text-muted-foreground text-sm">{project.title}</span>
+          <p className="text-sm text-muted-foreground mt-1">{project.title}</p>
         )}
       </div>
+      <ProjectNav projectId={projectId!} active="graph" className="mb-2" />
 
       <Tabs defaultValue="graph">
         <TabsList>

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, waitFor, fireEvent, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
@@ -34,6 +34,10 @@ const emptySettings = {
 describe("SettingsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   it("renders loading skeleton initially", () => {
@@ -81,6 +85,41 @@ describe("SettingsPage", () => {
     });
     const testButtons = screen.getAllByText("测试连接");
     expect(testButtons.length).toBeGreaterThan(0);
+  });
+
+  it("shows masked api key after loading saved settings", async () => {
+    vi.mocked(api.getLlmSettings).mockResolvedValue({
+      ...emptySettings, id: "s1",
+      api_key_masked: "sk-a***********6789",
+      base_url: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    });
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/已保存 Key/)).toBeInTheDocument();
+      expect(screen.getByText("sk-a***********6789")).toBeInTheDocument();
+    });
+  });
+
+  it("updates masked api key display after save", async () => {
+    vi.mocked(api.getLlmSettings).mockResolvedValue(emptySettings);
+    vi.mocked(api.updateLlmSettings).mockResolvedValue({
+      ...emptySettings, id: "s1",
+      api_key_masked: "sk-t***********3456",
+      base_url: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+    });
+    renderPage();
+
+    await waitFor(() => screen.getByLabelText("API Key"));
+
+    fireEvent.change(screen.getByLabelText("API Key"), { target: { value: "sk-test-key-123456" } });
+    fireEvent.click(screen.getAllByText("保存设置")[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText("sk-t***********3456")).toBeInTheDocument();
+    });
   });
 
   it("calls updateLlmSettings on save", async () => {

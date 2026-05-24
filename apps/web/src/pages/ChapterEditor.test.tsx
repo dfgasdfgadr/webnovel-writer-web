@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as api from "@/lib/api";
@@ -10,6 +10,7 @@ vi.mock("@/lib/api", () => ({
   listChapters: vi.fn(),
   getChapter: vi.fn(),
   getReviews: vi.fn(),
+  getLlmSettings: vi.fn(),
   updateChapter: vi.fn(),
   runPipeline: vi.fn(),
   createChapter: vi.fn(),
@@ -27,6 +28,7 @@ const mockChapter = {
   title: "第一章 测试",
   number: 1,
   content: "这是测试内容。",
+  outline: "",
   word_count: 7,
   status: "draft",
   created_at: "2026-01-01T00:00:00Z",
@@ -75,6 +77,13 @@ function renderChapterEditor(route = "/projects/proj-1/chapters/ch-1") {
 describe("ChapterEditor", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getLlmSettings).mockResolvedValue({
+      user_id: "user-1",
+      api_key_masked: null,
+      base_url: null,
+      model: null,
+      updated_at: null,
+    });
   });
 
   afterEach(() => {
@@ -204,6 +213,64 @@ describe("ChapterEditor", () => {
     await waitFor(() => {
       expect(screen.getByText("AI 生成")).toBeInTheDocument();
       expect(screen.getByText("流水线")).toBeInTheDocument();
+    });
+  });
+
+  it("blocks AI generate when outline is empty", async () => {
+    vi.mocked(api.getProject).mockResolvedValue(mockProject);
+    vi.mocked(api.listChapters).mockResolvedValue(mockChaptersList);
+    vi.mocked(api.getChapter).mockResolvedValue({ ...mockChapter, outline: "" });
+    vi.mocked(api.getReviews).mockResolvedValue([]);
+    vi.mocked(api.getLlmSettings).mockResolvedValue({
+      user_id: "user-1",
+      api_key_masked: "sk-****1234",
+      base_url: "https://api.example.com/v1",
+      model: "gpt-4o",
+      updated_at: null,
+    });
+    vi.mocked(api.streamDraftUrl).mockReturnValue("/api/v1/agents/pipeline/ch-1/stream");
+
+    renderChapterEditor();
+
+    await waitFor(() => {
+      expect(screen.getByText("AI 生成")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("AI 生成"));
+    expect(api.streamDraftUrl).not.toHaveBeenCalled();
+  });
+
+  it("loads saved outline and saves outline on button click", async () => {
+    vi.mocked(api.getProject).mockResolvedValue(mockProject);
+    vi.mocked(api.listChapters).mockResolvedValue(mockChaptersList);
+    vi.mocked(api.getChapter).mockResolvedValue({
+      ...mockChapter,
+      outline: "已有章纲",
+    });
+    vi.mocked(api.getReviews).mockResolvedValue([]);
+    vi.mocked(api.updateChapter).mockResolvedValue({
+      ...mockChapter,
+      outline: "更新后的章纲",
+    });
+
+    renderChapterEditor();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "第一章 测试" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("章纲"));
+
+    const outlineInput = await screen.findByPlaceholderText(/输入章纲/);
+    expect(outlineInput).toHaveValue("已有章纲");
+
+    fireEvent.change(outlineInput, { target: { value: "更新后的章纲" } });
+    fireEvent.click(screen.getByText("保存"));
+
+    await waitFor(() => {
+      expect(api.updateChapter).toHaveBeenCalledWith("proj-1", "ch-1", {
+        outline: "更新后的章纲",
+      });
     });
   });
 });

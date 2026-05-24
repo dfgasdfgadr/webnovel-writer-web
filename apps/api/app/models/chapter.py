@@ -28,6 +28,7 @@ class Chapter(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, default="")
+    outline: Mapped[str] = mapped_column(Text, default="")
     word_count: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(20), default="draft")  # draft | reviewing | accepted | archived
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

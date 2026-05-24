@@ -1,7 +1,11 @@
-# NovelCraft Phase 0 执行简报
+# NovelCraft Phase 0 执行简报（归档）
 
 > **STATUS: DONE** — 2026-05-24 · 82 files · 2 commits
 > Claude Code 已自动完成全部 Phase 0 任务。
+
+> **后续阶段简报**见 `docs/briefs/` 目录：
+> - 模板：[`docs/briefs/EXECUTION_BRIEF_TEMPLATE.md`](docs/briefs/EXECUTION_BRIEF_TEMPLATE.md)
+> - Phase 2（当前待执行）：[`docs/briefs/PHASE2_EXECUTION_BRIEF.md`](docs/briefs/PHASE2_EXECUTION_BRIEF.md)
 
 ## 工作目录
 
@@ -67,5 +71,8 @@
 ## 完成后
 
 - 更新 EXECUTION_BRIEF.md 顶部 STATUS 为 DONE
+- **生成交接文档** `docs/handoffs/PHASE0_HANDOFF.md`（按 HANDOFF_TEMPLATE.md）
 - 列出已完成文件树
 - 列出已知 TODO 留给 Phase 1
+
+> 交接文档已生成：[`docs/handoffs/PHASE0_HANDOFF.md`](docs/handoffs/PHASE0_HANDOFF.md)

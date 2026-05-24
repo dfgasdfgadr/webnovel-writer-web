@@ -59,7 +59,8 @@ describe("SimulationCenter", () => {
     await waitFor(() => {
       expect(screen.getByText("测试项目")).toBeInTheDocument();
     });
-    expect(screen.getByText("推演中心")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "推演中心" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "项目列表" })).toBeInTheDocument();
   });
 
   it("renders mode selection cards", async () => {

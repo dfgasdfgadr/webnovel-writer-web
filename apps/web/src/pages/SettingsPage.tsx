@@ -25,6 +25,7 @@ export function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [savedKeyMasked, setSavedKeyMasked] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{
     success: boolean;
     message: string;
@@ -45,13 +46,14 @@ export function SettingsPage() {
   async function loadSettings() {
     try {
       const data = await getLlmSettings();
+      setSavedKeyMasked(data.api_key_masked);
       form.reset({
         api_key: "",
         base_url: data.base_url || "https://api.openai.com/v1",
         model: data.model || "gpt-4o",
       });
     } catch {
-      // leave form empty
+      setSavedKeyMasked(null);
     } finally {
       setLoading(false);
     }
@@ -64,8 +66,9 @@ export function SettingsPage() {
       if (values.api_key) payload.api_key = values.api_key;
       if (values.base_url) payload.base_url = values.base_url;
       if (values.model) payload.model = values.model;
-      await updateLlmSettings(payload);
-      form.setValue("api_key", ""); // clear after save
+      const updated = await updateLlmSettings(payload);
+      setSavedKeyMasked(updated.api_key_masked ?? null);
+      form.setValue("api_key", "");
       toast.success("LLM 设置已保存");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "保存失败");
@@ -94,6 +97,8 @@ export function SettingsPage() {
       setTesting(false);
     }
   }
+
+  const apiKeyValue = form.watch("api_key");
 
   if (loading) {
     return (
@@ -128,7 +133,7 @@ export function SettingsPage() {
               <Input
                 id="api_key"
                 type={showKey ? "text" : "password"}
-                placeholder="sk-..."
+                placeholder={savedKeyMasked ? `已配置 ${savedKeyMasked}` : "sk-..."}
                 {...form.register("api_key")}
                 className="pr-10 font-mono"
               />
@@ -143,6 +148,12 @@ export function SettingsPage() {
             <p className="text-xs text-muted-foreground">
               留空则不更新已保存的 Key。在浏览器设置页配置的 Key 优先于 .env 全局配置。
             </p>
+            {savedKeyMasked && !apiKeyValue && (
+              <p className="text-xs text-emerald-400 flex items-center gap-1">
+                <CheckCircle className="size-3.5 shrink-0" />
+                已保存 Key：<span className="font-mono">{savedKeyMasked}</span>
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">

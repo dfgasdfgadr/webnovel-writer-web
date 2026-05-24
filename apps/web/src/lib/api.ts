@@ -143,7 +143,11 @@ export function getChapter(projectId: string, chapterId: string) {
   return request<ChapterPublic>(`/projects/${projectId}/chapters/${chapterId}`);
 }
 
-export function updateChapter(projectId: string, chapterId: string, data: { title?: string; content?: string; status?: string }) {
+export function updateChapter(
+  projectId: string,
+  chapterId: string,
+  data: { title?: string; content?: string; outline?: string; status?: string }
+) {
   return request<ChapterPublic>(`/projects/${projectId}/chapters/${chapterId}`, {
     method: "PATCH",
     body: JSON.stringify(data),

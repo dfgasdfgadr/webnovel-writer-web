@@ -4,15 +4,18 @@
 
 自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 3 消歧队列 + 滚动卷纲 + Checkpoint 恢复**（Phase 0/1/2 已完成）。
 
-## 必读（Phase 3 启动顺序）
+## 新 Phase 启动顺序
 
-1. **`docs/briefs/PHASE3_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
-2. `.claude-instructions.md` — **全局强制规则（含阶段交接文档 + 执行简报流程）**
-- `docs/handoffs/PHASE0_HANDOFF.md` — Phase 0 交接文档
-- `docs/handoffs/PHASE1_HANDOFF.md` — Phase 1 交接文档
-- `docs/handoffs/PHASE2_HANDOFF.md` — Phase 2 交接文档（开始 Phase 3 前必读）
-- `docs/handoffs/HANDOFF_TEMPLATE.md` — 交接文档模板
-- `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 完整产品与技术计划
+> **只读上一阶段交接文档**，更早的 handoff 为归档，无需重复阅读。
+
+1. **`docs/briefs/PHASE{N}_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
+2. **`docs/handoffs/PHASE{N-1}_HANDOFF.md`** — **仅上一阶段**交接文档（Phase 3 即 `PHASE2_HANDOFF.md`）
+3. `.claude-instructions.md` — 全局强制规则（含阶段交接文档 + 执行简报流程）
+4. `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 对应 Phase 章节与验收标准
+
+**当前 Phase 3 必读**：`PHASE3_EXECUTION_BRIEF.md` → `PHASE2_HANDOFF.md`
+
+生成本阶段 handoff 时参考：`docs/handoffs/HANDOFF_TEMPLATE.md`
 
 ## 技术栈
 

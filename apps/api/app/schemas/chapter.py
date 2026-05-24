@@ -5,11 +5,13 @@ class ChapterCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     number: int = Field(ge=1)
     content: str | None = ""
+    outline: str | None = ""
 
 
 class ChapterUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     content: str | None = None
+    outline: str | None = None
     status: str | None = None
 
 
@@ -19,6 +21,7 @@ class ChapterPublic(BaseModel):
     title: str
     number: int
     content: str
+    outline: str
     word_count: int
     status: str
     created_at: str

@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Save, Trash2, FileText,
   Sparkles, Play, PanelRightOpen, PanelRightClose,
   AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp,
-  ExternalLink,
+  ExternalLink, ClipboardCheck, FlaskConical, Network,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
 
@@ -37,6 +38,8 @@ export function ChapterEditor() {
   const [newChapterTitle, setNewChapterTitle] = useState("");
   const editorRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -68,17 +71,17 @@ export function ChapterEditor() {
     staleTime: 5 * 60_000,
   });
 
-  // Sync content from chapter data (useEffect, not render body)
+  // Sync content/outline from chapter data (useEffect, not render body)
   useEffect(() => {
     if (chapter) {
       setContent(chapter.content ?? "");
+      setOutline(chapter.outline ?? "");
     }
-    setOutline("");
-  }, [chapterId, chapter?.content]);
+  }, [chapterId, chapter?.content, chapter?.outline]);
 
   const saveMutation = useMutation({
-    mutationFn: (newContent: string) =>
-      api.updateChapter(projectId!, chapterId!, { content: newContent }),
+    mutationFn: (data: { content?: string; outline?: string }) =>
+      api.updateChapter(projectId!, chapterId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chapter", projectId, chapterId] });
       toast.success("已保存");
@@ -87,7 +90,7 @@ export function ChapterEditor() {
   });
 
   const pipelineMutation = useMutation({
-    mutationFn: () => api.runPipeline(chapterId!, outline || chapter?.content || ""),
+    mutationFn: () => api.runPipeline(chapterId!, outline || chapter?.outline || chapter?.content || ""),
     onSuccess: (result) => {
       if (result.chapter_text) setContent(result.chapter_text);
       if (result.blocking_issues.length > 0) setShowReview(true);
@@ -131,26 +134,69 @@ export function ChapterEditor() {
   // SSE streaming generation
   const startStreaming = useCallback(() => {
     if (!chapterId || isGenerating) return;
+
+    if (llmSettings && !llmSettings.api_key_masked) {
+      toast.error("未配置 API Key，请先在设置页配置");
+      return;
+    }
+
+    const draftOutline = (outline || chapter?.outline || "").trim();
+    if (!draftOutline) {
+      toast.error("请先填写章纲后再 AI 生成");
+      setShowOutline(true);
+      return;
+    }
+
+    eventSourceRef.current?.close();
     setIsGenerating(true);
-    setContent("");
+    setStreamStatus("连接 AI 服务...");
     const abort = new AbortController();
     abortRef.current = abort;
 
-    const url = api.streamDraftUrl(chapterId!, outline || chapter?.content || "开始写作");
-    // Use native EventSource for SSE
+    const url = api.streamDraftUrl(chapterId!, draftOutline);
     const es = new EventSource(url);
+    eventSourceRef.current = es;
+    let receivedContent = false;
+
+    const finish = (errorMessage?: string) => {
+      es.close();
+      if (eventSourceRef.current === es) eventSourceRef.current = null;
+      setIsGenerating(false);
+      setStreamStatus(null);
+      if (errorMessage) toast.error(errorMessage);
+    };
+
     es.onmessage = (event) => {
       if (event.data === "[DONE]") {
-        es.close();
-        setIsGenerating(false);
+        finish();
         toast.success("AI 生成完成");
         return;
       }
       try {
-        const parsed = JSON.parse(event.data);
-        if (parsed.content) {
-          setContent((prev) => prev + parsed.content);
-          // Auto-scroll editor
+        const parsed = JSON.parse(event.data) as {
+          type?: string;
+          content?: string;
+          message?: string;
+        };
+
+        if (parsed.type === "error") {
+          finish(parsed.message || "AI 生成失败");
+          return;
+        }
+
+        if (parsed.type === "status" && parsed.message) {
+          setStreamStatus(parsed.message);
+          return;
+        }
+
+        const chunk = parsed.type === "content" ? parsed.content : parsed.content;
+        if (chunk) {
+          if (!receivedContent) {
+            receivedContent = true;
+            setContent("");
+            setStreamStatus(null);
+          }
+          setContent((prev) => prev + chunk);
           if (editorRef.current) {
             editorRef.current.scrollTop = editorRef.current.scrollHeight;
           }
@@ -159,25 +205,33 @@ export function ChapterEditor() {
         // ignore parse errors
       }
     };
+
     es.onerror = () => {
-      es.close();
-      setIsGenerating(false);
-      toast.error("SSE 连接中断");
+      finish(receivedContent ? "SSE 连接中断" : "AI 生成连接失败，请检查 API Key 与网络");
     };
-    // Cleanup on abort
-    abort.signal.addEventListener("abort", () => { es.close(); setIsGenerating(false); });
-  }, [chapterId, outline, chapter, isGenerating]);
+
+    abort.signal.addEventListener("abort", () => finish());
+  }, [chapterId, outline, chapter, isGenerating, llmSettings]);
 
   const stopStreaming = useCallback(() => {
     abortRef.current?.abort();
+    eventSourceRef.current?.close();
+    eventSourceRef.current = null;
     setIsGenerating(false);
+    setStreamStatus(null);
   }, []);
 
   const handleSave = useCallback(() => {
-    if (chapterId && content !== chapter?.content) {
-      saveMutation.mutate(content);
+    if (!chapterId || !chapter) return;
+    const updates: { content?: string; outline?: string } = {};
+    if (content !== (chapter.content ?? "")) updates.content = content;
+    if (outline !== (chapter.outline ?? "")) updates.outline = outline;
+    if (Object.keys(updates).length === 0) {
+      toast.message("没有需要保存的更改");
+      return;
     }
-  }, [content, chapterId, chapter?.content, saveMutation]);
+    saveMutation.mutate(updates);
+  }, [content, outline, chapterId, chapter, saveMutation]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -208,7 +262,7 @@ export function ChapterEditor() {
     <div className="flex h-[calc(100vh-8rem)] gap-0">
       {/* Chapter list sidebar — visible on xl+ (1280px), Sheet on smaller */}
       <aside className="w-56 border-r shrink-0 flex-col hidden xl:flex">
-        <div className="p-3 border-b flex items-center justify-between">
+        <div className="p-3 border-b space-y-3">
           <Link
             to={`/projects/${projectId}`}
             className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
@@ -216,6 +270,7 @@ export function ChapterEditor() {
             <ArrowLeft className="size-3" />
             {project?.title ?? "返回"}
           </Link>
+          <ProjectNav projectId={projectId} className="flex-col items-stretch gap-1" />
         </div>
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
@@ -399,6 +454,12 @@ export function ChapterEditor() {
                 </Button>
               )}
 
+              {streamStatus && (
+                <span className="text-xs text-amber-400/90 truncate max-w-[12rem]">
+                  {streamStatus}
+                </span>
+              )}
+
               <Button
                 size="sm"
                 variant="default"
@@ -437,6 +498,27 @@ export function ChapterEditor() {
                 {showReview ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
                 {showReview ? "隐藏审查" : "审查"}
               </Button>
+
+              <Link to={`/projects/${projectId}/reviews/${chapterId}`}>
+                <Button variant="ghost" size="sm" className="text-xs" title="独立审查页">
+                  <ClipboardCheck className="size-4 mr-1" />
+                  审查页
+                </Button>
+              </Link>
+
+              <Link to={`/projects/${projectId}/simulations`}>
+                <Button variant="ghost" size="sm" className="text-xs hidden lg:inline-flex" title="推演中心">
+                  <FlaskConical className="size-4 mr-1" />
+                  推演
+                </Button>
+              </Link>
+
+              <Link to={`/projects/${projectId}/graph`}>
+                <Button variant="ghost" size="sm" className="text-xs hidden lg:inline-flex" title="关系图谱">
+                  <Network className="size-4 mr-1" />
+                  图谱
+                </Button>
+              </Link>
 
               <Button
                 variant="ghost" size="icon"

@@ -188,14 +188,16 @@ async def run_pipeline(
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    pipeline = WritingPipeline(
+    pipeline = await WritingPipeline.create(
         db=db,
         project_root=project.root_dir or ".",
         chapter_id=chapter_id,
         project_id=project.id,
         chapter_num=chapter.number,
+        user_id=current_user.id,
     )
-    result = await pipeline.run_full(body.chapter_outline or chapter.content)
+    effective_outline = (body.chapter_outline or chapter.outline or chapter.content or "").strip()
+    result = await pipeline.run_full(effective_outline)
     return PipelineStatusResponse(
         success=result.success,
         step_results=result.step_results,
@@ -225,20 +227,34 @@ async def stream_draft(
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    pipeline = WritingPipeline(
+    pipeline = await WritingPipeline.create(
         db=db,
         project_root=project.root_dir or ".",
         chapter_id=chapter_id,
         project_id=project.id,
         chapter_num=chapter.number,
+        user_id=current_user.id,
     )
 
-    async def generate():
-        async for chunk in pipeline.stream_draft(outline or chapter.content):
-            yield f"data: {json.dumps({'content': chunk})}\n\n"
-        yield "data: [DONE]\n\n"
+    effective_outline = (outline or chapter.outline or chapter.content or "").strip()
+    if not effective_outline:
+        raise HTTPException(status_code=400, detail="请先填写章纲后再 AI 生成")
 
-    return StreamingResponse(generate(), media_type="text/event-stream")
+    async def generate():
+        try:
+            async for event in pipeline.stream_draft(effective_outline):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        except ValueError as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': f'AI 生成失败: {e}'}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # --- Agent Runs & Reviews ---

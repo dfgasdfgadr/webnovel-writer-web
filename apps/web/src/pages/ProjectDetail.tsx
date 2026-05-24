@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, FileText, Trash2, Edit3, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, FileText, Trash2, Loader2, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
@@ -170,6 +171,8 @@ export function ProjectDetail() {
         </Dialog>
       </div>
 
+      <ProjectNav projectId={projectId!} active="chapters" className="mb-6" />
+
       {/* Chapters */}
       {chaptersLoading ? (
         <div className="space-y-2">
@@ -208,6 +211,17 @@ export function ProjectDetail() {
                   <Badge variant="outline" className="text-xs shrink-0">
                     {ch.word_count} 字
                   </Badge>
+                </Link>
+                <Link to={`/projects/${projectId}/reviews/${ch.id}`}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-muted-foreground hover:text-amber-400 shrink-0"
+                    title="审查中心"
+                  >
+                    <ClipboardCheck className="size-3.5 mr-1" />
+                    审查
+                  </Button>
                 </Link>
                 <Button
                   variant="ghost"

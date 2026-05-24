@@ -53,6 +53,7 @@ def sync_sqlite_schema(conn: Connection) -> None:
     migrations = [
         # (table, column, column_definition)
         ("projects", "root_dir", "root_dir VARCHAR(500) DEFAULT ''"),
+        ("chapters", "outline", "outline TEXT DEFAULT ''"),
     ]
 
     for table, column, col_def in migrations:

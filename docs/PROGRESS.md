@@ -9,8 +9,16 @@
 | 0 | 基建与骨架 | DONE | [PHASE0_HANDOFF.md](handoffs/PHASE0_HANDOFF.md) |
 | 1 | MVP 写作闭环 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
 | 2 | MiroFish + LLM 设置 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
-| 3 | 质量与体验 | PENDING | — |
+| 3 | 质量与体验 | IN_PROGRESS | — |
 | 4 | 生态与自动化 | PENDING | — |
+
+## PM 监控（Phase 3 — 执行中）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-24 | 已派单 | PM 签发 PHASE3_EXECUTION_BRIEF，后台 `-p`，日志 `claude-phase3.log` |
+
+---
 
 ## PM 监控（Phase 2 — 已完成）
 

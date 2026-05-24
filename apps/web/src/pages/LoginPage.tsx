@@ -105,6 +105,13 @@ export function LoginPage() {
               {isRegister ? "登录" : "注册"}
             </button>
           </div>
+          {!isRegister && (
+            <p className="mt-3 text-center text-xs text-muted-foreground/80">
+              开发环境默认账号：<span className="font-mono text-foreground/70">admin</span> /{" "}
+              <span className="font-mono text-foreground/70">admin123456</span>
+              （需先运行 <span className="font-mono">pnpm seed</span>）
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

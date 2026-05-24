@@ -48,11 +48,13 @@ async def create_chapter(
     await _get_owned_project(project_id, current_user.id, db)
 
     content = body.content or ""
+    outline = body.outline or ""
     chapter = Chapter(
         project_id=project_id,
         title=body.title,
         number=body.number,
         content=content,
+        outline=outline,
         word_count=_count_words(content),
     )
     db.add(chapter)
@@ -130,6 +132,7 @@ def _chapter_public(c: Chapter) -> ChapterPublic:
         title=c.title,
         number=c.number,
         content=c.content,
+        outline=c.outline or "",
         word_count=c.word_count,
         status=c.status,
         created_at=c.created_at.isoformat(),

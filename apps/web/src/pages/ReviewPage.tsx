@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
 
 function severityIcon(s: string) {
@@ -47,14 +48,14 @@ export function ReviewPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-start gap-4 flex-wrap">
         <Link to={`/projects/${projectId}/chapters/${chapterId}`}>
           <Button variant="ghost" size="sm">
             <ArrowLeft className="size-4 mr-1" />
             返回写作台
           </Button>
         </Link>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-serif font-semibold tracking-tight">
             审查中心
           </h1>
@@ -69,6 +70,7 @@ export function ReviewPage() {
           </div>
         </div>
       </div>
+      {projectId && <ProjectNav projectId={projectId} className="mb-2" />}
 
       {chapterLoading || reviewsLoading ? (
         <div className="space-y-3">
