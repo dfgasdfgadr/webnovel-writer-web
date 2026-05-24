@@ -28,6 +28,8 @@ async def _setup_db():
     """Create all tables once for the test session."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        from app.db.schema import sync_sqlite_schema
+        await conn.run_sync(sync_sqlite_schema)
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)

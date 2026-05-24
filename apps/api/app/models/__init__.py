@@ -8,10 +8,13 @@ from app.models.contract import ChapterCommit, ReviewIssue
 from app.models.user_llm_settings import UserLlmSettings
 from app.models.simulation import SimulationJob
 from app.models.search_doc import SearchDoc
+from app.models.disambiguation import DisambiguationItem
+from app.models.summary import Summary
 
 __all__ = [
     "User", "Project", "Chapter",
     "Card", "Entity", "Relationship", "Foreshadowing",
     "AgentRun", "ChapterCommit", "ReviewIssue",
     "UserLlmSettings", "SimulationJob", "SearchDoc",
+    "DisambiguationItem", "Summary",
 ]

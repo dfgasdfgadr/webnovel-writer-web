@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as api from "@/lib/api";
 import { PlanningCenter } from "./PlanningCenter";
@@ -13,6 +13,10 @@ vi.mock("@/lib/api", () => ({
   generateVolumePlan: vi.fn(),
 }));
 
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn() },
+}));
+
 function renderPage() {
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -20,7 +24,9 @@ function renderPage() {
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={["/projects/proj-1/planning"]}>
-        <PlanningCenter />
+        <Routes>
+          <Route path="/projects/:projectId/planning" element={<PlanningCenter />} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -100,7 +106,7 @@ describe("PlanningCenter", () => {
   it("renders page header and loading state", async () => {
     vi.mocked(api.getProject).mockReturnValue(new Promise(() => {}));
     renderPage();
-    expect(screen.getByText("规划中心")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "规划中心" })).toBeInTheDocument();
   });
 
   it("renders project title after load", async () => {

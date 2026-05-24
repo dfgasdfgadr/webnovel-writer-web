@@ -102,6 +102,7 @@ def _project_public(p: Project) -> ProjectPublic:
         genre=p.genre,
         status=p.status,
         owner_id=p.owner_id,
+        synopsis_json=p.synopsis_json,
         created_at=p.created_at.isoformat(),
         updated_at=p.updated_at.isoformat(),
     )

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine, Base
 from app.db.schema import sync_sqlite_schema
-from app.routers import auth_router, projects_router, chapters_router, health_router, agents_router, cards_router, settings_router, simulations_router
+from app.routers import auth_router, projects_router, chapters_router, health_router, agents_router, cards_router, settings_router, simulations_router, disambiguation_router, summaries_router
 
 
 @asynccontextmanager
@@ -39,3 +39,5 @@ app.include_router(agents_router)
 app.include_router(cards_router)
 app.include_router(settings_router)
 app.include_router(simulations_router)
+app.include_router(disambiguation_router)
+app.include_router(summaries_router)

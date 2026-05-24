@@ -22,6 +22,11 @@ import type {
   BatchOutlineResponse,
   VolumePlanRequest,
   VolumePlanResponse,
+  DisambiguationItemPublic,
+  DisambiguationListResponse,
+  SummaryPublic,
+  SummaryCreateRequest,
+  SummaryUpdateRequest,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -49,6 +54,11 @@ export type {
   BatchOutlineResponse,
   VolumePlanRequest,
   VolumePlanResponse,
+  DisambiguationItemPublic,
+  DisambiguationListResponse,
+  SummaryPublic,
+  SummaryCreateRequest,
+  SummaryUpdateRequest,
 };
 
 const BASE_URL = "/api/v1";
@@ -268,4 +278,41 @@ export function resumeCheckpoint(chapterId: string, step: string) {
     method: "POST",
     body: JSON.stringify({ step }),
   });
+}
+
+// ---- Disambiguation ----
+export function listDisambiguationItems(projectId: string, status?: string) {
+  const params = status ? `?status=${status}` : "";
+  return request<DisambiguationListResponse>(`/disambiguation/${projectId}${params}`);
+}
+
+export function resolveDisambiguationItem(projectId: string, itemId: string, data: { status: string; resolved_by: string }) {
+  return request<DisambiguationItemPublic>(`/disambiguation/${projectId}/${itemId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+// ---- Summaries ----
+export function listSummaries(projectId: string, level?: string) {
+  const params = level ? `?level=${level}` : "";
+  return request<SummaryPublic[]>(`/summaries/${projectId}${params}`);
+}
+
+export function createSummary(projectId: string, data: SummaryCreateRequest) {
+  return request<SummaryPublic>(`/summaries/${projectId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateSummary(projectId: string, summaryId: string, data: SummaryUpdateRequest) {
+  return request<SummaryPublic>(`/summaries/${projectId}/${summaryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteSummary(projectId: string, summaryId: string) {
+  return request<void>(`/summaries/${projectId}/${summaryId}`, { method: "DELETE" });
 }

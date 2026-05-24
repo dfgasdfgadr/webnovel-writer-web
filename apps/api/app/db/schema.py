@@ -10,12 +10,14 @@ from app.models import (  # noqa: F401 — register all models on metadata
     Card,
     Chapter,
     ChapterCommit,
+    DisambiguationItem,
     Entity,
     Foreshadowing,
     Project,
     Relationship,
     ReviewIssue,
     SearchDoc,
+    Summary,
     User,
 )
 

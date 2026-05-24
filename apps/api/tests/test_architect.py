@@ -1,11 +1,9 @@
 """Tests for architect API endpoints."""
 import json
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 from httpx import AsyncClient
-
-from app.agents.llm import LLMProvider, LLMResponse
 
 
 async def _create_project(async_client: AsyncClient, auth_headers: dict, title: str = "Test Project") -> str:
@@ -34,33 +32,22 @@ MOCK_OUTLINE = {
 
 
 @pytest.fixture(autouse=True)
-def _patch_llm():
-    """Mock LLMProvider to avoid real API calls in architect tests."""
-    mock_response = LLMResponse(
-        content=json.dumps({"genre": "玄幻", "hook": "废柴逆袭"}),
-        token_input=50,
-        token_output=100,
-    )
+def _patch_architect():
+    """Mock ArchitectAgent methods to avoid real LLM calls."""
+    from app.agents.architect import ArchitectAgent
 
-    mock_llm = MagicMock(spec=LLMProvider)
-    mock_llm.api_key = "mock-key"
-    mock_llm.base_url = "http://mock"
+    async def mock_synopsis(self, premise: dict) -> dict:
+        return dict(MOCK_SYNOPSIS)
 
-    async def mock_chat(messages, temperature=0.7):
-        # Return appropriate mock data based on the request content
-        content = messages[1].content if len(messages) > 1 else ""
-        if "总纲" in content or "前提" in content or "synopsis" in content.lower() or "premise" in content.lower():
-            return LLMResponse(content=json.dumps(MOCK_SYNOPSIS, ensure_ascii=False), token_input=50, token_output=100)
-        elif "章纲" in content or "outline" in content.lower() or "volume" in content.lower():
-            return LLMResponse(content=json.dumps(MOCK_OUTLINE, ensure_ascii=False), token_input=50, token_output=100)
-        return LLMResponse(content=json.dumps({}), token_input=50, token_output=100)
+    async def mock_chapter_outline(self, synopsis: dict, volume: dict, chapter_num: int, prev_summaries=None) -> dict:
+        result = dict(MOCK_OUTLINE)
+        result["chapter_num"] = chapter_num
+        return result
 
-    mock_llm.chat = mock_chat
-
-    async def mock_for_user(user_id, db_session=None):
-        return mock_llm
-
-    with patch("app.routers.agents.LLMProvider.for_user", side_effect=mock_for_user):
+    with (
+        patch.object(ArchitectAgent, "synopsis", mock_synopsis),
+        patch.object(ArchitectAgent, "chapter_outline", mock_chapter_outline),
+    ):
         yield
 
 
@@ -93,7 +80,6 @@ class TestArchitectSynopsis:
 
     async def test_generate_synopsis_other_user_project(self, async_client: AsyncClient, auth_headers: dict):
         pid = await _create_project(async_client, auth_headers)
-        # Register another user
         await async_client.post("/api/v1/auth/register", json={
             "username": "other", "password": "other123", "display_name": "Other",
         })
@@ -118,7 +104,6 @@ class TestArchitectSynopsis:
             headers=auth_headers,
         )
 
-        # Verify project now has synopsis_json
         resp = await async_client.get(f"/api/v1/projects/{pid}", headers=auth_headers)
         assert resp.status_code == 200
         project = resp.json()
@@ -164,7 +149,6 @@ class TestArchitectOutline:
 
     async def test_generate_outline_updates_existing_chapter(self, async_client: AsyncClient, auth_headers: dict):
         pid = await _create_project(async_client, auth_headers)
-        # Create chapter first
         await async_client.post(
             f"/api/v1/projects/{pid}/chapters",
             json={"title": "Old Title", "number": 1, "content": "Old content"},
@@ -218,7 +202,6 @@ class TestArchitectVolumePlan:
     async def test_volume_plan_success(self, async_client: AsyncClient, auth_headers: dict):
         pid = await _create_project(async_client, auth_headers)
 
-        # First generate synopsis so it's persisted
         await async_client.post(
             f"/api/v1/agents/architect/synopsis/{pid}",
             json={"genre": "玄幻"},
@@ -227,17 +210,13 @@ class TestArchitectVolumePlan:
 
         resp = await async_client.post(
             f"/api/v1/agents/architect/volume-plan/{pid}",
-            json={
-                "total_chapters": 100,
-                "chapters_per_volume": 50,
-            },
+            json={"total_chapters": 100, "chapters_per_volume": 50},
             headers=auth_headers,
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["total_volumes"] == 2
         assert len(data["volumes"]) == 2
-        # First volume should have detailed chapters
         assert data["volumes"][0]["chapters"] is not None
 
     async def test_volume_plan_requires_auth(self, async_client: AsyncClient):

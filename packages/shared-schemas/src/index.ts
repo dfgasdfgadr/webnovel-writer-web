@@ -269,6 +269,62 @@ export interface SimJob {
   created_at: string;
 }
 
+// ─── Disambiguation ───
+export type DisambiguationStatus = "pending" | "accepted" | "rejected";
+
+export interface DisambiguationItemPublic {
+  id: string;
+  project_id: string;
+  chapter_id: string | null;
+  field_name: string;
+  current_value: string;
+  confidence: number;
+  alternatives: string;
+  suggestion: string | null;
+  status: DisambiguationStatus;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+export interface DisambiguationResolveRequest {
+  status: "accepted" | "rejected";
+  resolved_by: string;
+}
+
+export interface DisambiguationListResponse {
+  items: DisambiguationItemPublic[];
+  total: number;
+}
+
+// ─── Summary ───
+export type SummaryLevel = "volume" | "arc" | "chapter";
+
+export interface SummaryPublic {
+  id: string;
+  project_id: string;
+  level: SummaryLevel;
+  scope_label: string;
+  parent_id: string | null;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SummaryCreateRequest {
+  level: SummaryLevel;
+  scope_label: string;
+  parent_id?: string | null;
+  title: string;
+  content: string;
+}
+
+export interface SummaryUpdateRequest {
+  title?: string;
+  content?: string;
+}
+
 // ─── API Wrappers ───
 export interface ApiError {
   detail: string;

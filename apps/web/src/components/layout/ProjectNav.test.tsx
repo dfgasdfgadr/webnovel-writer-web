@@ -22,6 +22,14 @@ describe("ProjectNav", () => {
       "href",
       "/projects/p1/graph"
     );
+    expect(screen.getByRole("link", { name: /规划中心/ })).toHaveAttribute(
+      "href",
+      "/projects/p1/planning"
+    );
+    expect(screen.getByRole("link", { name: /消歧队列/ })).toHaveAttribute(
+      "href",
+      "/projects/p1/disambiguation"
+    );
   });
 
   it("highlights simulations tab when active", () => {
@@ -44,5 +52,7 @@ describe("resolveProjectNavTab", () => {
     expect(resolveProjectNavTab("/projects/p1/simulations")).toBe("simulations");
     expect(resolveProjectNavTab("/projects/p1/chapters/c1")).toBe("chapters");
     expect(resolveProjectNavTab("/projects/p1/reviews/c1")).toBe("chapters");
+    expect(resolveProjectNavTab("/projects/p1/planning")).toBe("planning");
+    expect(resolveProjectNavTab("/projects/p1/disambiguation")).toBe("disambiguation");
   });
 });

@@ -15,6 +15,7 @@ import { GraphView } from "@/pages/GraphView";
 import { SimulationCenter } from "@/pages/SimulationCenter";
 import { ReviewPage } from "@/pages/ReviewPage";
 import { PlanningCenter } from "@/pages/PlanningCenter";
+import { DisambiguationQueue } from "@/pages/DisambiguationQueue";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -70,6 +71,7 @@ export default function App() {
                 <Route path="/projects/:projectId/planning" element={<PlanningCenter />} />
                 <Route path="/projects/:projectId/graph" element={<GraphView />} />
                 <Route path="/projects/:projectId/simulations" element={<SimulationCenter />} />
+                <Route path="/projects/:projectId/disambiguation" element={<DisambiguationQueue />} />
                 <Route
                   path="/projects/:projectId/chapters/:chapterId"
                   element={<ChapterEditor />}
