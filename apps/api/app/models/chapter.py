@@ -4,7 +4,20 @@ from datetime import datetime, timezone
 from sqlalchemy import String, DateTime, Text, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+import re
 from app.database import Base
+
+
+def calculate_word_count(text: str) -> int:
+    """Count Chinese characters + words in a text."""
+    if not text:
+        return 0
+    # Count Chinese characters
+    chinese = len(re.findall(r'[一-鿿]', text))
+    # Count words in non-Chinese segments
+    non_chinese = re.sub(r'[一-鿿]', ' ', text)
+    words = len(non_chinese.split())
+    return chinese + words
 
 
 class Chapter(Base):
