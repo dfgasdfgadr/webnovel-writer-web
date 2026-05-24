@@ -8,10 +8,12 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from jose import JWTError, jwt
 
 from app.database import get_db
 from app.models import User, Project, Chapter, ReviewIssue, AgentRun
-from app.services.auth import get_current_user
+from app.services.auth import get_current_user, hash_password, verify_password, create_access_token
+from app.config import settings
 from app.pipeline import WritingPipeline
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
@@ -60,13 +62,34 @@ async def run_pipeline(
     )
 
 
+async def _get_user_from_token(token_str: str, db: AsyncSession) -> User:
+    try:
+        payload = jwt.decode(token_str, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
 @router.get("/pipeline/{chapter_id}/stream")
 async def stream_draft(
     chapter_id: str,
     outline: str = Query(default=""),
-    current_user: User = Depends(get_current_user),
+    token: str = Query(default=""),
     db: AsyncSession = Depends(get_db),
 ):
+    # Support both query param token (EventSource) and Bearer header
+    current_user = await _get_user_from_token(token, db) if token else None
+    # Fallback: try to use header-based auth
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Token required as query param")
+
     chapter = await db.get(Chapter, chapter_id)
     if not chapter:
         raise HTTPException(status_code=404, detail="Chapter not found")

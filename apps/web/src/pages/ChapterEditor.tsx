@@ -1,13 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  Loader2,
-  Plus,
-  Save,
-  Trash2,
-  FileText,
+  ArrowLeft, Loader2, Plus, Save, Trash2, FileText,
+  Sparkles, Play, PanelRightOpen, PanelRightClose,
+  AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +12,11 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription,
+  DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/layout/EmptyState";
 import * as api from "@/lib/api";
@@ -32,8 +27,14 @@ export function ChapterEditor() {
   const queryClient = useQueryClient();
 
   const [content, setContent] = useState("");
+  const [outline, setOutline] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [showOutline, setShowOutline] = useState(false);
+  const [showReview, setShowReview] = useState(false);
   const [isNewChapterOpen, setIsNewChapterOpen] = useState(false);
   const [newChapterTitle, setNewChapterTitle] = useState("");
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -53,6 +54,12 @@ export function ChapterEditor() {
     enabled: !!projectId && !!chapterId,
   });
 
+  const { data: reviews, refetch: refetchReviews } = useQuery({
+    queryKey: ["reviews", chapterId],
+    queryFn: () => api.getReviews(chapterId!),
+    enabled: !!chapterId,
+  });
+
   // Sync content when chapter loads
   if (chapter && content === "" && chapterId) {
     setContent(chapter.content);
@@ -68,6 +75,22 @@ export function ChapterEditor() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "保存失败"),
   });
 
+  const pipelineMutation = useMutation({
+    mutationFn: () => api.runPipeline(chapterId!, outline || chapter?.content || ""),
+    onSuccess: (result) => {
+      if (result.chapter_text) setContent(result.chapter_text);
+      if (result.blocking_issues.length > 0) setShowReview(true);
+      refetchReviews();
+      queryClient.invalidateQueries({ queryKey: ["chapter", projectId, chapterId] });
+      toast.success(
+        result.success
+          ? `流水线完成 (${result.blocking_issues.length} 个阻断问题)`
+          : `流水线完成但有阻断问题`
+      );
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "流水线执行失败"),
+  });
+
   const createChapterMutation = useMutation({
     mutationFn: (title: string) =>
       api.createChapter(projectId!, {
@@ -75,7 +98,7 @@ export function ChapterEditor() {
         number: (chaptersData?.items?.length ?? 0) + 1,
         content: "",
       }),
-    onSuccess: (newChapter) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["chapters", projectId] });
       setIsNewChapterOpen(false);
       setNewChapterTitle("");
@@ -94,14 +117,59 @@ export function ChapterEditor() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "删除失败"),
   });
 
+  // SSE streaming generation
+  const startStreaming = useCallback(() => {
+    if (!chapterId || isGenerating) return;
+    setIsGenerating(true);
+    setContent("");
+    const abort = new AbortController();
+    abortRef.current = abort;
+
+    const url = api.streamDraftUrl(chapterId!, outline || chapter?.content || "开始写作");
+    // Use native EventSource for SSE
+    const es = new EventSource(url);
+    es.onmessage = (event) => {
+      if (event.data === "[DONE]") {
+        es.close();
+        setIsGenerating(false);
+        toast.success("AI 生成完成");
+        return;
+      }
+      try {
+        const parsed = JSON.parse(event.data);
+        if (parsed.content) {
+          setContent((prev) => prev + parsed.content);
+          // Auto-scroll editor
+          if (editorRef.current) {
+            editorRef.current.scrollTop = editorRef.current.scrollHeight;
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
+    };
+    es.onerror = () => {
+      es.close();
+      setIsGenerating(false);
+      toast.error("SSE 连接中断");
+    };
+    // Cleanup on abort
+    abort.signal.addEventListener("abort", () => { es.close(); setIsGenerating(false); });
+  }, [chapterId, outline, chapter, isGenerating]);
+
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+    setIsGenerating(false);
+  }, []);
+
   const handleSave = useCallback(() => {
     if (chapterId && content !== chapter?.content) {
       saveMutation.mutate(content);
     }
   }, [content, chapterId, chapter?.content, saveMutation]);
 
-  // Keyboard shortcut: Ctrl+S
-  useState(() => {
+  // Keyboard shortcuts
+  useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
@@ -110,11 +178,20 @@ export function ChapterEditor() {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  });
+  }, [handleSave]);
 
   const chapters = chaptersData?.items ?? [];
+  const blockingCount = reviews?.filter((r) => r.severity === "blocking" && !r.is_fixed).length ?? 0;
 
   if (!projectId) return null;
+
+  const severityIcon = (s: string) => {
+    switch (s) {
+      case "blocking": return <AlertTriangle className="size-4 text-red-400 shrink-0" />;
+      case "major": return <AlertCircle className="size-4 text-amber-400 shrink-0" />;
+      default: return <Info className="size-4 text-muted-foreground shrink-0" />;
+    }
+  };
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-0">
@@ -170,9 +247,7 @@ export function ChapterEditor() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>新建章节</DialogTitle>
-                <DialogDescription>
-                  第 {chapters.length + 1} 章
-                </DialogDescription>
+                <DialogDescription>第 {chapters.length + 1} 章</DialogDescription>
               </DialogHeader>
               <form
                 onSubmit={(e) => {
@@ -223,8 +298,8 @@ export function ChapterEditor() {
         ) : chapter ? (
           <>
             {/* Toolbar */}
-            <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0">
-              <h2 className="font-serif text-lg font-semibold truncate flex-1">
+            <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0 flex-wrap">
+              <h2 className="font-serif text-lg font-semibold truncate flex-1 min-w-0">
                 {chapter.title}
               </h2>
               <Badge variant="outline" className="text-xs">
@@ -234,13 +309,41 @@ export function ChapterEditor() {
                 variant={chapter.status === "draft" ? "secondary" : "default"}
                 className="text-xs"
               >
-                {chapter.status === "draft" ? "草稿" : chapter.status}
+                {chapter.status === "draft" ? "草稿" : chapter.status === "accepted" ? "已通过" : chapter.status}
               </Badge>
+
+              <Button size="sm" variant="ghost" onClick={() => setShowOutline(!showOutline)}>
+                {showOutline ? <ChevronUp className="size-3 mr-1" /> : <ChevronDown className="size-3 mr-1" />}
+                章纲
+              </Button>
+
+              {isGenerating ? (
+                <Button size="sm" variant="destructive" onClick={stopStreaming}>
+                  <Loader2 className="size-4 mr-1 animate-spin" />
+                  停止生成
+                </Button>
+              ) : (
+                <Button size="sm" variant="outline" onClick={startStreaming}>
+                  <Sparkles className="size-4 mr-1" />
+                  AI 生成
+                </Button>
+              )}
+
               <Button
                 size="sm"
-                onClick={handleSave}
-                disabled={saveMutation.isPending}
+                variant="default"
+                onClick={() => pipelineMutation.mutate()}
+                disabled={pipelineMutation.isPending}
               >
+                {pipelineMutation.isPending ? (
+                  <Loader2 className="size-4 mr-1 animate-spin" />
+                ) : (
+                  <Play className="size-4 mr-1" />
+                )}
+                流水线
+              </Button>
+
+              <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? (
                   <Loader2 className="size-4 mr-1 animate-spin" />
                 ) : (
@@ -248,9 +351,25 @@ export function ChapterEditor() {
                 )}
                 保存
               </Button>
+
+              {blockingCount > 0 && (
+                <Button size="sm" variant="destructive" onClick={() => setShowReview(!showReview)}>
+                  <AlertTriangle className="size-4 mr-1" />
+                  {blockingCount} 个阻断
+                </Button>
+              )}
+
               <Button
-                variant="ghost"
-                size="icon"
+                variant="ghost" size="sm"
+                onClick={() => setShowReview(!showReview)}
+                className="text-xs"
+              >
+                {showReview ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
+                {showReview ? "隐藏审查" : "审查"}
+              </Button>
+
+              <Button
+                variant="ghost" size="icon"
                 className="size-8 text-muted-foreground hover:text-destructive"
                 onClick={() => {
                   if (confirm("确定删除此章节？")) deleteMutation.mutate();
@@ -260,20 +379,86 @@ export function ChapterEditor() {
               </Button>
             </div>
 
-            {/* Editor */}
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="flex-1 w-full resize-none p-6 bg-transparent text-foreground font-serif text-lg leading-relaxed outline-none placeholder:text-muted-foreground/40"
-              placeholder="开始写作..."
-              spellCheck={false}
-            />
+            {/* Outline input */}
+            {showOutline && (
+              <div className="px-4 py-3 border-b bg-muted/30">
+                <Label className="text-xs mb-1 block">章纲</Label>
+                <Textarea
+                  value={outline}
+                  onChange={(e) => setOutline(e.target.value)}
+                  placeholder="输入章纲，用于指导 AI 写作和审查..."
+                  className="font-mono text-xs h-20 resize-none"
+                />
+              </div>
+            )}
+
+            {/* Editor + Review Panel */}
+            <div className="flex-1 flex min-h-0">
+              <textarea
+                ref={editorRef}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className={`flex-1 resize-none p-6 bg-transparent text-foreground font-serif text-lg leading-relaxed outline-none placeholder:text-muted-foreground/40 ${isGenerating ? "border-r border-amber-500/20" : ""}`}
+                placeholder="开始写作，或点击「AI 生成」由 WriterAgent 代写..."
+                spellCheck={false}
+                disabled={isGenerating}
+              />
+
+              {/* Review side panel */}
+              {showReview && (
+                <aside className="w-80 border-l shrink-0 flex flex-col bg-muted/10">
+                  <div className="p-3 border-b flex items-center justify-between">
+                    <span className="text-sm font-medium">审查结果</span>
+                    <Button variant="ghost" size="icon" className="size-6" onClick={() => setShowReview(false)}>
+                      <PanelRightClose className="size-4" />
+                    </Button>
+                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-3 space-y-3">
+                      {reviews == null ? (
+                        <p className="text-xs text-muted-foreground">暂无审查结果。运行流水线以获取审查报告。</p>
+                      ) : reviews.length === 0 ? (
+                        <p className="text-xs text-emerald-400">无问题，审查通过。</p>
+                      ) : (
+                        reviews.map((issue) => (
+                          <div
+                            key={issue.id}
+                            className={`p-3 rounded-lg text-xs space-y-1.5 ${
+                              issue.severity === "blocking"
+                                ? "bg-red-500/10 border border-red-500/20"
+                                : issue.severity === "major"
+                                  ? "bg-amber-500/10 border border-amber-500/20"
+                                  : "bg-muted/50 border border-border"
+                            } ${issue.is_fixed ? "opacity-50" : ""}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {severityIcon(issue.severity)}
+                              <span className="font-medium text-foreground">{issue.title}</span>
+                              <Badge variant="outline" className="text-[10px] ml-auto">
+                                {issue.category}
+                              </Badge>
+                            </div>
+                            <p className="text-muted-foreground">{issue.description}</p>
+                            {issue.evidence && (
+                              <blockquote className="border-l-2 border-muted-foreground/30 pl-2 italic text-muted-foreground/70">
+                                {issue.evidence}
+                              </blockquote>
+                            )}
+                            {issue.suggestion && (
+                              <p className="text-amber-400/80">建议：{issue.suggestion}</p>
+                            )}
+                            {issue.is_fixed && <Badge className="text-[10px]">已修复</Badge>}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </aside>
+              )}
+            </div>
           </>
         ) : (
-          <EmptyState
-            title="章节未找到"
-            description="此章节可能已被删除。"
-          />
+          <EmptyState title="章节未找到" description="此章节可能已被删除。" />
         )}
       </div>
     </div>

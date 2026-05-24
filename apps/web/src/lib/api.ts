@@ -161,3 +161,57 @@ export function updateChapter(projectId: string, chapterId: string, data: { titl
 export function deleteChapter(projectId: string, chapterId: string) {
   return request<void>(`/projects/${projectId}/chapters/${chapterId}`, { method: "DELETE" });
 }
+
+// ---- Agents ----
+export interface PipelineStatus {
+  success: boolean;
+  step_results: { step: string; result: Record<string, unknown> }[];
+  blocking_issues: ReviewIssue[];
+  chapter_text: string;
+  error: string | null;
+}
+
+export interface ReviewIssue {
+  id: string;
+  severity: "blocking" | "major" | "minor";
+  category: string;
+  title: string;
+  description: string;
+  evidence: string;
+  suggestion: string | null;
+  is_fixed: boolean;
+  created_at: string;
+}
+
+export interface AgentRunPublic {
+  id: string;
+  agent_type: string;
+  phase: string;
+  status: string;
+  token_input: number;
+  token_output: number;
+  elapsed_ms: number;
+  error_message: string | null;
+  created_at: string;
+}
+
+export function runPipeline(chapterId: string, outline: string) {
+  return request<PipelineStatus>(`/agents/pipeline/${chapterId}`, {
+    method: "POST",
+    body: JSON.stringify({ chapter_outline: outline }),
+  });
+}
+
+export function streamDraftUrl(chapterId: string, outline: string): string {
+  const token = getToken();
+  const params = new URLSearchParams({ outline, token: token || "" });
+  return `${BASE_URL}/agents/pipeline/${chapterId}/stream?${params.toString()}`;
+}
+
+export function getReviews(chapterId: string) {
+  return request<ReviewIssue[]>(`/agents/reviews/${chapterId}`);
+}
+
+export function listAgentRuns(projectId: string) {
+  return request<AgentRunPublic[]>(`/agents/runs/${projectId}`);
+}
