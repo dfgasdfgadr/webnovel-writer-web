@@ -14,14 +14,15 @@
 
 ## 当前阻塞
 
+- [ ] **P0 ChapterEditor 无限重渲染** — Too many re-renders，已派 Claude Code（2026-05-24）
 - [x] ~~**P0 项目列表 500**~~ → 已修复（`app/db/schema.py` + `test_schema.py`）
-- [ ] **Phase 0/1 单元测试补债** — 后端 47 用例通过，前端 18/25 通过（7 例 LoginPage DOM 查询待修）
+- [ ] **Phase 0/1 单元测试补债** — 后端 47 passed，前端 25 passed（api/auth store/LoginPage 全覆盖）
 
 ## 最近修复（2026-05-24）
 
 - **项目列表 500**：Phase 1 新增 `projects.root_dir` 列，旧 SQLite 未迁移 → `app/db/schema.py` 启动时自动补列（含日志 + 异常保护）；新增 `test_schema.py` 回归单测（4 用例覆盖缺列/幂等/表不存在）
 
-**验证**：`pnpm test:api` — 47 passed（含 schema 迁移 4 用例 + auth/projects/chapters/config/health 全量）
+**验证**：`pnpm test` — 72 passed（后端 47 + 前端 25，api/auth store/LoginPage 全覆盖）
 
 ## 测试策略（2026-05-24 PM 新增）
 
@@ -30,6 +31,16 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-24：P0 Bug Fix — 项目列表 500 + 全量测试补债
+
+- **Bug 修复**：Phase 1 新增 `projects.root_dir` 列，旧 SQLite `create_all` 不会 ALTER 已有表导致 `/api/v1/projects` 500
+  - `app/db/schema.py`：增强 `sync_sqlite_schema`（日志 + 异常保护 + 可扩展迁移列表）
+  - `app/main.py`：`on_event("startup")` → lifespan 模式（消除 FastAPI 弃用警告）
+- **回归单测**：`tests/test_schema.py` — 4 用例覆盖缺列/幂等/已有列/表不存在
+- **测试补债**：提交全量 Phase 0/1 后端测试（47 用例） + 前端测试（25 用例）
+- **Schema 审计**：Phase 1 仅 `projects.root_dir` 为旧库迁移项，7 个新表由 `create_all` 创建
+- `pnpm test` → 72 passed（后端 47 + 前端 25）
 
 ### 2026-05-24：Phase 1 核心后端完成
 
