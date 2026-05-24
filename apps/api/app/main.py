@@ -5,11 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import engine, Base
+from app.db.schema import sync_sqlite_schema
 from app.routers import auth_router, projects_router, chapters_router, health_router, agents_router, cards_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(sync_sqlite_schema)
     yield
 
 
@@ -33,9 +37,3 @@ app.include_router(projects_router)
 app.include_router(chapters_router)
 app.include_router(agents_router)
 app.include_router(cards_router)
-
-
-@app.on_event("startup")
-async def startup():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)

@@ -7,14 +7,21 @@
 | Phase | 名称 | 状态 | 交接文档 |
 |-------|------|------|----------|
 | 0 | 基建与骨架 | DONE | [PHASE0_HANDOFF.md](handoffs/PHASE0_HANDOFF.md) |
-| 1 | MVP 写作闭环 | IN_PROGRESS | — |
-| 2 | MiroFish 集成 | PENDING | — |
+| 1 | MVP 写作闭环 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
+| 2 | MiroFish 集成 | IN_PROGRESS | — |
 | 3 | 质量与体验 | PENDING | — |
 | 4 | 生态与自动化 | PENDING | — |
 
 ## 当前阻塞
 
-- [ ] **Phase 0 无单元测试** — PM 新增强制要求，见 `docs/TESTING.md` §9（已派 Claude Code）
+- [x] ~~**P0 项目列表 500**~~ → 已修复（`app/db/schema.py` + `test_schema.py`）
+- [ ] **Phase 0/1 单元测试补债** — 后端 47 用例通过，前端 18/25 通过（7 例 LoginPage DOM 查询待修）
+
+## 最近修复（2026-05-24）
+
+- **项目列表 500**：Phase 1 新增 `projects.root_dir` 列，旧 SQLite 未迁移 → `app/db/schema.py` 启动时自动补列（含日志 + 异常保护）；新增 `test_schema.py` 回归单测（4 用例覆盖缺列/幂等/表不存在）
+
+**验证**：`pnpm test:api` — 47 passed（含 schema 迁移 4 用例 + auth/projects/chapters/config/health 全量）
 
 ## 测试策略（2026-05-24 PM 新增）
 
