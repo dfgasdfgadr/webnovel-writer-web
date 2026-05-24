@@ -23,6 +23,7 @@ interface NavItem {
 
 const mainNav: NavItem[] = [
   { title: "项目 Hub", url: "/", icon: Home },
+  { title: "设置", url: "/settings", icon: Settings },
 ];
 
 export function AppSidebar() {

@@ -8,9 +8,25 @@
 |-------|------|------|----------|
 | 0 | 基建与骨架 | DONE | [PHASE0_HANDOFF.md](handoffs/PHASE0_HANDOFF.md) |
 | 1 | MVP 写作闭环 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
-| 2 | MiroFish 集成 | IN_PROGRESS | — |
+| 2 | MiroFish + LLM 设置 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
 | 3 | 质量与体验 | PENDING | — |
 | 4 | 生态与自动化 | PENDING | — |
+
+## PM 监控（Phase 2 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-24 18:57 | 已派单 | 后台 `-p`，日志 `claude-phase2.log`，Shell 33006 |
+| 2026-05-24 ~19:00 | 执行中 | 后端 LLM 设置 API 已创建 |
+| 2026-05-24 ~19:48 | 执行中 | 主要模块已落盘未 commit |
+| 2026-05-24 完成 | **DONE** | 全部 4 个目标完成，137 test passed，PHASE2_HANDOFF 已生成 |
+
+---
+
+- **Phase 2 执行简报已签发** → [`docs/briefs/PHASE2_EXECUTION_BRIEF.md`](briefs/PHASE2_EXECUTION_BRIEF.md)
+- 含：用户 LLM 设置页、MiroFish 推演、ContinuityAgent、图谱、Phase 1 遗留项
+- **状态**：Claude Code 后台执行中（`-p` 派单，日志 `claude-phase2.log`）
+- **PM 职责**：监控日志 / git commit / 测试，里程碑更新本文件
 
 ## 当前阻塞
 
@@ -32,6 +48,15 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-24：Phase 2 完成 — 长篇一致性 + MiroFish + LLM 配置
+
+- **LLM 设置（1.1）**：SettingsPage（表单 + 连接测试）+ user_llm_settings 表（XOR 加密）+ LLMProvider.for_user() 优先级 + 无 Key 引导
+- **MiroFish（1.2）**：packages/mirofish-bridge + docker/compose.mirofish.yml + Simulation API + SimulationCenter UI + graceful 降级
+- **长篇一致性（1.3）**：ContinuityAgent（写前桥接）+ /graph 端点 + GraphView（SVG 图谱 + 伏笔时间线 Tab）
+- **Phase 1 遗留（1.4）**：ReviewPage 独立审查中心 + 1280px 响应式（Sheet/overlay）+ BM25 持久化（SearchDoc 表）+ shared-schemas 类型统一 + .env.example
+- **测试**：81 API + 56 Web = 137 passed（8 套新测试文件，32 新增用例）
+- **文档**：PHASE2_HANDOFF.md 已生成，README 已更新 LLM 配置说明，EXECUTION_BRIEF STATUS=DONE
 
 ### 2026-05-24：测试基础设施搭建 + Phase 0 测试补债
 

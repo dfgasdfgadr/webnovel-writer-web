@@ -1,3 +1,40 @@
+import type {
+  TokenResponse,
+  UserPublic,
+  ProjectPublic,
+  ProjectList,
+  ChapterPublic,
+  ChapterList,
+  ReviewIssue,
+  PipelineStatus,
+  AgentRunPublic,
+  LlmSettingsResponse,
+  ConnectionTestResponse,
+  GraphNode,
+  GraphEdge,
+  TimelineItem,
+  GraphData,
+} from "@novelcraft/shared-schemas";
+
+// Re-export types for consumers
+export type {
+  TokenResponse,
+  UserPublic,
+  ProjectPublic,
+  ProjectList,
+  ChapterPublic,
+  ChapterList,
+  ReviewIssue,
+  PipelineStatus,
+  AgentRunPublic,
+  LlmSettingsResponse,
+  ConnectionTestResponse,
+  GraphNode,
+  GraphEdge,
+  TimelineItem,
+  GraphData,
+};
+
 const BASE_URL = "/api/v1";
 
 function getToken(): string | null {
@@ -37,18 +74,6 @@ async function request<T>(
 }
 
 // ---- Auth ----
-export interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
-export interface UserPublic {
-  id: string;
-  username: string;
-  display_name: string | null;
-  created_at: string;
-}
-
 export function login(username: string, password: string) {
   const formData = new URLSearchParams();
   formData.set("username", username);
@@ -76,22 +101,6 @@ export function getMe() {
 }
 
 // ---- Projects ----
-export interface ProjectPublic {
-  id: string;
-  title: string;
-  description: string | null;
-  genre: string | null;
-  status: string;
-  owner_id: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProjectList {
-  items: ProjectPublic[];
-  total: number;
-}
-
 export function listProjects() {
   return request<ProjectList>("/projects");
 }
@@ -119,23 +128,6 @@ export function deleteProject(id: string) {
 }
 
 // ---- Chapters ----
-export interface ChapterPublic {
-  id: string;
-  project_id: string;
-  title: string;
-  number: number;
-  content: string;
-  word_count: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ChapterList {
-  items: ChapterPublic[];
-  total: number;
-}
-
 export function listChapters(projectId: string) {
   return request<ChapterList>(`/projects/${projectId}/chapters`);
 }
@@ -163,38 +155,6 @@ export function deleteChapter(projectId: string, chapterId: string) {
 }
 
 // ---- Agents ----
-export interface PipelineStatus {
-  success: boolean;
-  step_results: { step: string; result: Record<string, unknown> }[];
-  blocking_issues: ReviewIssue[];
-  chapter_text: string;
-  error: string | null;
-}
-
-export interface ReviewIssue {
-  id: string;
-  severity: "blocking" | "major" | "minor";
-  category: string;
-  title: string;
-  description: string;
-  evidence: string;
-  suggestion: string | null;
-  is_fixed: boolean;
-  created_at: string;
-}
-
-export interface AgentRunPublic {
-  id: string;
-  agent_type: string;
-  phase: string;
-  status: string;
-  token_input: number;
-  token_output: number;
-  elapsed_ms: number;
-  error_message: string | null;
-  created_at: string;
-}
-
 export function runPipeline(chapterId: string, outline: string) {
   return request<PipelineStatus>(`/agents/pipeline/${chapterId}`, {
     method: "POST",
@@ -214,4 +174,28 @@ export function getReviews(chapterId: string) {
 
 export function listAgentRuns(projectId: string) {
   return request<AgentRunPublic[]>(`/agents/runs/${projectId}`);
+}
+
+// ---- Settings ----
+export function getLlmSettings() {
+  return request<LlmSettingsResponse>("/settings/llm");
+}
+
+export function updateLlmSettings(data: { api_key?: string; base_url?: string; model?: string }) {
+  return request<LlmSettingsResponse>("/settings/llm", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function testLlmConnection(data?: { api_key?: string; base_url?: string; model?: string }) {
+  return request<ConnectionTestResponse>("/settings/llm/test", {
+    method: "POST",
+    body: JSON.stringify(data || {}),
+  });
+}
+
+// ---- Graph & Continuity ----
+export function getGraphData(projectId: string) {
+  return request<GraphData>(`/agents/graph/${projectId}`);
 }

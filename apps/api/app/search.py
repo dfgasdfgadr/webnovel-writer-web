@@ -91,7 +91,11 @@ class BM25:
 
 
 class SearchIndex:
-    """Unified search across entities, cards, chapters."""
+    """Unified search across entities, cards, chapters.
+
+    Supports persistence via SearchDoc DB table: pre-tokenized docs are
+    saved to the DB and loaded on next search, avoiding re-tokenization.
+    """
 
     entity_index: BM25
     card_index: BM25
@@ -100,23 +104,51 @@ class SearchIndex:
         self.entity_index = BM25()
         self.card_index = BM25()
 
-    def index_entity(self, entity: Any) -> None:
+    def index_entity(self, entity: Any) -> tuple[str, str, str, list[str], dict]:
         attrs_str = " ".join(str(v) for v in (entity.attributes or {}).values())
+        content = f"{entity.entity_type} {entity.label} {' '.join(entity.aliases or [])} {attrs_str}"
+        tokens = BM25.tokenize(f"{entity.label} {content}")
+        meta = {"entity_type": entity.entity_type}
         self.entity_index.add_document(
             doc_id=entity.id,
             title=entity.label,
-            content=f"{entity.entity_type} {entity.label} {' '.join(entity.aliases or [])} {attrs_str}",
-            meta={"entity_type": entity.entity_type},
+            content=content,
+            meta=meta,
         )
+        return (entity.id, entity.label, content, tokens, meta)
 
-    def index_card(self, card: Any) -> None:
+    def index_card(self, card: Any) -> tuple[str, str, str, list[str], dict]:
         content_str = " ".join(str(v) for v in (card.content or {}).values())
+        content = f"{card.card_type} {card.label} {content_str}"
+        tokens = BM25.tokenize(f"{card.label} {content}")
+        meta = {"card_type": card.card_type}
         self.card_index.add_document(
             doc_id=card.id,
             title=card.label,
-            content=f"{card.card_type} {card.label} {content_str}",
-            meta={"card_type": card.card_type},
+            content=content,
+            meta=meta,
         )
+        return (card.id, card.label, content, tokens, meta)
+
+    def load_from_persisted(self, search_docs) -> None:
+        """Load pre-tokenized documents from the search_docs DB table."""
+        for doc in search_docs:
+            tokens = doc.get_tokens()
+            if not tokens:
+                continue
+            from collections import Counter
+            term_freq = Counter(tokens)
+            meta = doc.get_meta()
+            target = self.entity_index if meta.get("entity_type") else self.card_index
+            target.documents.append({
+                "id": doc.doc_id, "title": doc.title, "content": doc.content,
+                "meta": meta, "tokens": tokens,
+            })
+            target.doc_terms.append(dict(term_freq))
+            target.doc_lengths.append(len(tokens))
+            for term in set(tokens):
+                target.term_df[term] = target.term_df.get(term, 0) + 1
+            target.total_docs += 1
 
     def search_entities(self, query: str, top_k: int = 5) -> list[dict]:
         return self.entity_index.search(query, top_k)

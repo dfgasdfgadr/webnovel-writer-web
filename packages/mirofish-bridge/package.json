@@ -1,0 +1,13 @@
+{
+  "name": "@novelcraft/mirofish-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MiroFish HTTP Sidecar bridge for NovelCraft — seed packet assembly and API client",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

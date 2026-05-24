@@ -157,12 +157,15 @@ pnpm dev:web       # http://localhost:5173
 - `docs/handoffs/PHASE0_HANDOFF.md` — 了解 Phase 0 基建
 
 **Phase 2 首要任务**（按优先级）：
-1. MiroFish Sidecar + SimBridge + 推演中心 UI
-2. PreChapterSim + BranchExplore 两种推演模式
-3. ContinuityAgent（前 2 章桥接）
-4. 滚动卷纲规划、三级摘要
-5. 消歧队列、checkpoint 恢复
-6. 关系图谱 + 伏笔时间线前端
+1. **用户 LLM 设置页**（Web UI + 后端 API，用户级 Key 优先于 .env）
+2. MiroFish Sidecar + SimBridge + 推演中心 UI
+3. PreChapterSim + BranchExplore 两种推演模式
+4. ContinuityAgent（前 2 章桥接）
+5. 滚动卷纲规划、三级摘要
+6. 消歧队列、checkpoint 恢复
+7. 关系图谱 + 伏笔时间线前端
+
+**执行入口**：PM 签发 [`docs/briefs/PHASE2_EXECUTION_BRIEF.md`](../briefs/PHASE2_EXECUTION_BRIEF.md) 后 Claude Code 读简报执行。
 
 **不要重复做**：
 - Agent 基类/LLMProvider/Harness 状态机

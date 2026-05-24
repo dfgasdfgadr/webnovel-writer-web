@@ -5,6 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Save, Trash2, FileText,
   Sparkles, Play, PanelRightOpen, PanelRightClose,
   AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import {
   Dialog, DialogContent, DialogDescription,
   DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/layout/EmptyState";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
@@ -58,6 +60,12 @@ export function ChapterEditor() {
     queryKey: ["reviews", chapterId],
     queryFn: () => api.getReviews(chapterId!),
     enabled: !!chapterId,
+  });
+
+  const { data: llmSettings } = useQuery({
+    queryKey: ["llmSettings"],
+    queryFn: () => api.getLlmSettings(),
+    staleTime: 5 * 60_000,
   });
 
   // Sync content from chapter data (useEffect, not render body)
@@ -198,8 +206,8 @@ export function ChapterEditor() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-0">
-      {/* Chapter list sidebar */}
-      <aside className="w-56 border-r shrink-0 flex flex-col">
+      {/* Chapter list sidebar — visible on xl+ (1280px), Sheet on smaller */}
+      <aside className="w-56 border-r shrink-0 flex-col hidden xl:flex">
         <div className="p-3 border-b flex items-center justify-between">
           <Link
             to={`/projects/${projectId}`}
@@ -300,8 +308,67 @@ export function ChapterEditor() {
           </div>
         ) : chapter ? (
           <>
+            {/* No-key warning */}
+            {llmSettings && !llmSettings.api_key_masked && (
+              <div className="flex items-center gap-3 mx-4 mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <AlertTriangle className="size-5 text-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-amber-400">未配置 API Key</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    AI 写作和流水线需要 LLM API Key。请在设置页配置后使用。
+                  </p>
+                </div>
+                <Link to="/settings" className="shrink-0">
+                  <Button size="sm" variant="outline">去设置</Button>
+                </Link>
+              </div>
+            )}
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-4 py-2 border-b shrink-0 flex-wrap">
+              {/* Mobile: chapter list Sheet trigger */}
+              <Sheet>
+                <SheetTrigger
+                  render={
+                    <Button variant="ghost" size="sm" className="xl:hidden">
+                      <FileText className="size-4" />
+                    </Button>
+                  }
+                />
+                <SheetContent side="left" className="w-72">
+                  <SheetHeader>
+                    <SheetTitle>{project?.title ?? "章节列表"}</SheetTitle>
+                  </SheetHeader>
+                  <ScrollArea className="flex-1 -mx-4">
+                    <div className="space-y-1 px-1">
+                      {chaptersLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                          <Skeleton key={i} className="h-8 w-full" />
+                        ))
+                      ) : chapters.length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-2">暂无章节</p>
+                      ) : (
+                        chapters.map((ch) => (
+                          <Link
+                            key={ch.id}
+                            to={`/projects/${projectId}/chapters/${ch.id}`}
+                            className={`block px-2 py-1.5 rounded text-sm transition-colors ${
+                              ch.id === chapterId
+                                ? "bg-amber-500/10 text-amber-400"
+                                : "hover:bg-muted text-foreground"
+                            }`}
+                          >
+                            <span className="text-muted-foreground text-xs mr-1">
+                              Ch{ch.number}.
+                            </span>
+                            {ch.title}
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </ScrollArea>
+                </SheetContent>
+              </Sheet>
+
               <h2 className="font-serif text-lg font-semibold truncate flex-1 min-w-0">
                 {chapter.title}
               </h2>
@@ -396,7 +463,7 @@ export function ChapterEditor() {
             )}
 
             {/* Editor + Review Panel */}
-            <div className="flex-1 flex min-h-0">
+            <div className="flex-1 flex min-h-0 relative">
               <textarea
                 ref={editorRef}
                 value={content}
@@ -407,14 +474,21 @@ export function ChapterEditor() {
                 disabled={isGenerating}
               />
 
-              {/* Review side panel */}
+              {/* Review side panel — inline on xl+, overlay on smaller */}
               {showReview && (
-                <aside className="w-80 border-l shrink-0 flex flex-col bg-muted/10">
+                <aside className="xl:w-80 xl:static xl:border-l shrink-0 flex flex-col bg-muted/10 absolute inset-y-0 right-0 w-full sm:w-80 z-10 xl:z-auto">
                   <div className="p-3 border-b flex items-center justify-between">
                     <span className="text-sm font-medium">审查结果</span>
-                    <Button variant="ghost" size="icon" className="size-6" onClick={() => setShowReview(false)}>
-                      <PanelRightClose className="size-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Link to={`/projects/${projectId}/reviews/${chapterId}`}>
+                        <Button variant="ghost" size="icon" className="size-6" title="独立审查页面">
+                          <ExternalLink className="size-3.5" />
+                        </Button>
+                      </Link>
+                      <Button variant="ghost" size="icon" className="size-6" onClick={() => setShowReview(false)}>
+                        <PanelRightClose className="size-4" />
+                      </Button>
+                    </div>
                   </div>
                   <ScrollArea className="flex-1">
                     <div className="p-3 space-y-3">

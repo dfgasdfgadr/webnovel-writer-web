@@ -1,0 +1,30 @@
+# MiroFish Sidecar (internal only, not exposed to public network)
+services:
+  mirofish:
+    image: novelcraft/mirofish:latest
+    container_name: mirofish-sidecar
+    ports:
+      - "127.0.0.1:8081:8080"  # Only localhost, not public
+    environment:
+      - MIROFISH_LOG_LEVEL=info
+      - MIROFISH_DATA_DIR=/data
+      - OPENAI_API_KEY=${LLM_API_KEY:-}
+      - OPENAI_BASE_URL=${LLM_BASE_URL:-https://api.openai.com/v1}
+    volumes:
+      - mirofish_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - novelcraft-internal
+
+volumes:
+  mirofish_data:
+
+networks:
+  novelcraft-internal:
+    internal: true

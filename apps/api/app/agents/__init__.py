@@ -6,11 +6,12 @@ from app.agents.writer import WriterAgent
 from app.agents.review import ReviewAgent
 from app.agents.data import DataAgent
 from app.agents.architect import ArchitectAgent
+from app.agents.continuity import ContinuityAgent
 
 __all__ = [
     "BaseAgent", "AgentResult",
     "LLMProvider", "LLMMessage", "LLMResponse",
     "Harness", "Phase", "Flow", "Step", "Checkpoint",
     "ContextAgent", "WriterAgent", "ReviewAgent", "DataAgent",
-    "ArchitectAgent",
+    "ArchitectAgent", "ContinuityAgent",
 ]

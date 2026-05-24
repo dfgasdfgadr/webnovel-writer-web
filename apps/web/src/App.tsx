@@ -10,6 +10,10 @@ import { LoginPage } from "@/pages/LoginPage";
 import { ProjectHub } from "@/pages/ProjectHub";
 import { ProjectDetail } from "@/pages/ProjectDetail";
 import { ChapterEditor } from "@/pages/ChapterEditor";
+import { SettingsPage } from "@/pages/SettingsPage";
+import { GraphView } from "@/pages/GraphView";
+import { SimulationCenter } from "@/pages/SimulationCenter";
+import { ReviewPage } from "@/pages/ReviewPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,10 +64,17 @@ export default function App() {
                 }
               >
                 <Route path="/" element={<ProjectHub />} />
+                <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectDetail />} />
+                <Route path="/projects/:projectId/graph" element={<GraphView />} />
+                <Route path="/projects/:projectId/simulations" element={<SimulationCenter />} />
                 <Route
                   path="/projects/:projectId/chapters/:chapterId"
                   element={<ChapterEditor />}
+                />
+                <Route
+                  path="/projects/:projectId/reviews/:chapterId"
+                  element={<ReviewPage />}
                 />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,7 +1,8 @@
 // === NovelCraft Shared Schemas ===
-// Phase 0: core API types shared between frontend and backend
+// Canonical TypeScript types shared between frontend and backend.
+// Frontend imports from here; backend Pydantic models mirror these shapes.
 
-// --------------- Auth ---------------
+// ─── Auth ───
 export interface LoginRequest {
   username: string;
   password: string;
@@ -15,7 +16,7 @@ export interface RegisterRequest {
 
 export interface TokenResponse {
   access_token: string;
-  token_type: "bearer";
+  token_type: string;
 }
 
 export interface UserPublic {
@@ -25,8 +26,19 @@ export interface UserPublic {
   created_at: string;
 }
 
-// --------------- Project ---------------
-export type ProjectStatus = "active" | "archived";
+// ─── Project ───
+export interface ProjectPublic {
+  id: string;
+  title: string;
+  description: string | null;
+  genre: string | null;
+  status: string;
+  owner_id: string;
+  volume_label?: string | null;
+  root_dir?: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface ProjectCreate {
   title: string;
@@ -38,22 +50,27 @@ export interface ProjectUpdate {
   title?: string;
   description?: string;
   genre?: string;
-  status?: ProjectStatus;
+  status?: string;
+  volume_label?: string | null;
 }
 
-export interface ProjectPublic {
+export interface ProjectList {
+  items: ProjectPublic[];
+  total: number;
+}
+
+// ─── Chapter ───
+export interface ChapterPublic {
   id: string;
+  project_id: string;
   title: string;
-  description: string | null;
-  genre: string | null;
-  status: ProjectStatus;
-  owner_id: string;
+  number: number;
+  content: string;
+  word_count: number;
+  status: string;
   created_at: string;
   updated_at: string;
 }
-
-// --------------- Chapter ---------------
-export type ChapterStatus = "draft" | "reviewing" | "accepted" | "archived";
 
 export interface ChapterCreate {
   project_id: string;
@@ -65,22 +82,117 @@ export interface ChapterCreate {
 export interface ChapterUpdate {
   title?: string;
   content?: string;
-  status?: ChapterStatus;
+  status?: string;
 }
 
-export interface ChapterPublic {
+export interface ChapterList {
+  items: ChapterPublic[];
+  total: number;
+}
+
+// ─── Agents ───
+export interface ReviewIssue {
   id: string;
-  project_id: string;
+  severity: "blocking" | "major" | "minor";
+  category: string;
   title: string;
-  number: number;
-  content: string;
-  word_count: number;
-  status: ChapterStatus;
+  description: string;
+  evidence: string;
+  suggestion: string | null;
+  is_fixed: boolean;
+  created_at: string;
+}
+
+export interface PipelineStatus {
+  success: boolean;
+  step_results: { step: string; result: Record<string, unknown> }[];
+  blocking_issues: ReviewIssue[];
+  chapter_text: string;
+  error: string | null;
+}
+
+export interface AgentRunPublic {
+  id: string;
+  agent_type: string;
+  phase: string;
+  status: string;
+  token_input: number;
+  token_output: number;
+  elapsed_ms: number;
+  error_message: string | null;
+  created_at: string;
+}
+
+// ─── LLM Settings ───
+export interface LlmSettingsResponse {
+  id: string;
+  user_id: string;
+  api_key_masked: string | null;
+  base_url: string | null;
+  model: string | null;
   created_at: string;
   updated_at: string;
 }
 
-// --------------- API Wrappers ---------------
+export interface LlmSettingsRequest {
+  api_key?: string | null;
+  base_url?: string | null;
+  model?: string | null;
+}
+
+export interface ConnectionTestResponse {
+  success: boolean;
+  message: string;
+  elapsed_ms: number;
+}
+
+// ─── Graph & Continuity ───
+export interface GraphNode {
+  id: string;
+  name: string;
+  type: string;
+  description: string | null;
+  importance: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  description: string | null;
+}
+
+export interface TimelineItem {
+  id: string;
+  title: string;
+  status: string;
+  chapter_planted: number | null;
+  chapter_resolved: number | null;
+  description: string | null;
+}
+
+export interface GraphData {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  timeline: TimelineItem[];
+}
+
+// ─── Simulation ───
+export interface SimJob {
+  id: string;
+  project_id: string;
+  mode: string;
+  status: string;
+  progress: number;
+  mirofish_available: boolean;
+  report: Record<string, unknown> | null;
+  steps: Array<{ step: string; status: string; description: string }> | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+// ─── API Wrappers ───
 export interface ApiError {
   detail: string;
 }

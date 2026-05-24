@@ -2,13 +2,15 @@
 
 ## 项目
 
-自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 2 长篇一致性 + MiroFish 集成**（Phase 0/1 已完成）。
+自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 3 消歧队列 + 滚动卷纲 + Checkpoint 恢复**（Phase 0/1/2 已完成）。
 
-## 必读
+## 必读（Phase 3 启动顺序）
 
-- `.claude-instructions.md` — **全局强制规则（含阶段交接文档要求）**
+1. **`docs/briefs/PHASE3_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
+2. `.claude-instructions.md` — **全局强制规则（含阶段交接文档 + 执行简报流程）**
 - `docs/handoffs/PHASE0_HANDOFF.md` — Phase 0 交接文档
-- `docs/handoffs/PHASE1_HANDOFF.md` — Phase 1 交接文档（开始 Phase 2 前必读）
+- `docs/handoffs/PHASE1_HANDOFF.md` — Phase 1 交接文档
+- `docs/handoffs/PHASE2_HANDOFF.md` — Phase 2 交接文档（开始 Phase 3 前必读）
 - `docs/handoffs/HANDOFF_TEMPLATE.md` — 交接文档模板
 - `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 完整产品与技术计划
 
@@ -50,4 +52,4 @@ docker/
 - 新功能 / bug 修复：测试与实现同 commit
 - Phase 完成：`pnpm test:coverage` 达标方可交接
 
-开始新 Phase 前，先读上一阶段交接文档，勿重复已完成工作。
+开始新 Phase 前：**先读 PM 签发的 `docs/briefs/PHASE{N}_EXECUTION_BRIEF.md`**，再读上一阶段交接文档，勿重复已完成工作。
