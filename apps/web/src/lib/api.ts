@@ -248,3 +248,24 @@ export function generateVolumePlan(projectId: string, data: VolumePlanRequest) {
     body: JSON.stringify(data),
   });
 }
+
+// ---- Checkpoint ----
+export interface CheckpointData {
+  phase: string;
+  flow: string;
+  step: string;
+  chapter_id: string;
+  project_id: string;
+  payload?: Record<string, unknown>;
+}
+
+export function getCheckpoint(chapterId: string) {
+  return request<{ checkpoint: CheckpointData | null }>(`/agents/pipeline/${chapterId}/checkpoint`);
+}
+
+export function resumeCheckpoint(chapterId: string, step: string) {
+  return request<PipelineStatus>(`/agents/pipeline/${chapterId}/checkpoint/resume`, {
+    method: "POST",
+    body: JSON.stringify({ step }),
+  });
+}

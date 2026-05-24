@@ -21,10 +21,15 @@ CONTEXT_SYSTEM = """你是资深网文编辑，负责为作者准备写前任务
 class ContextAgent(BaseAgent):
     agent_type = "context"
 
-    async def _execute(self, chapter_outline: str, contracts: dict, summaries: list[str] = None, **kwargs) -> dict:
+    async def _execute(self, chapter_outline: str, contracts: dict, summaries: list[str] = None, continuity: dict = None, **kwargs) -> dict:
+        continuity_text = ""
+        if continuity:
+            continuity_text = f"\n## 前文连续性快照\n{json.dumps(continuity, ensure_ascii=False, indent=2)}"
+
         context_text = "\n\n".join([
             f"## 章纲\n{chapter_outline}",
             f"## 合同约束\n{json.dumps(contracts, ensure_ascii=False, indent=2)}",
+            continuity_text.strip(),
             f"## 最近章节摘要\n" + "\n---\n".join(summaries) if summaries else "",
         ])
         messages = [

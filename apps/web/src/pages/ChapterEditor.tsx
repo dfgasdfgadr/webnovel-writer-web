@@ -5,7 +5,7 @@ import {
   ArrowLeft, Loader2, Plus, Save, Trash2, FileText,
   Sparkles, Play, PanelRightOpen, PanelRightClose,
   AlertTriangle, AlertCircle, Info, ChevronDown, ChevronUp,
-  ExternalLink, ClipboardCheck, FlaskConical, Network,
+  ExternalLink, ClipboardCheck, FlaskConical, Network, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,24 @@ export function ChapterEditor() {
   const abortRef = useRef<AbortController | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const [streamStatus, setStreamStatus] = useState<string | null>(null);
+
+  // Checkpoint state
+  const { data: checkpointData } = useQuery({
+    queryKey: ["checkpoint", chapterId],
+    queryFn: () => api.getCheckpoint(chapterId!),
+    enabled: !!chapterId,
+    refetchInterval: false,
+  });
+
+  const resumeCheckpointMutation = useMutation({
+    mutationFn: (step: string) => api.resumeCheckpoint(chapterId!, step),
+    onSuccess: (result) => {
+      if (result.chapter_text) setContent(result.chapter_text);
+      if (result.blocking_issues.length > 0) setShowReview(true);
+      toast.success("从断点恢复完成");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "恢复失败"),
+  });
 
   const { data: project } = useQuery({
     queryKey: ["project", projectId],
@@ -473,6 +491,24 @@ export function ChapterEditor() {
                 )}
                 流水线
               </Button>
+
+              {checkpointData?.checkpoint && checkpointData.checkpoint.step !== "commit" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-amber-400 border-amber-500/30"
+                  onClick={() => resumeCheckpointMutation.mutate(checkpointData.checkpoint!.step)}
+                  disabled={resumeCheckpointMutation.isPending}
+                  title={`从 ${checkpointData.checkpoint.step} 步恢复`}
+                >
+                  {resumeCheckpointMutation.isPending ? (
+                    <Loader2 className="size-4 mr-1 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4 mr-1" />
+                  )}
+                  恢复 ({checkpointData.checkpoint.step})
+                </Button>
+              )}
 
               <Button size="sm" onClick={handleSave} disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? (

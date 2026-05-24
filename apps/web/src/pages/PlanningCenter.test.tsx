@@ -11,7 +11,6 @@ vi.mock("@/lib/api", () => ({
   generateOutline: vi.fn(),
   generateBatchOutlines: vi.fn(),
   generateVolumePlan: vi.fn(),
-  updateProject: vi.fn(),
 }));
 
 function renderPage() {

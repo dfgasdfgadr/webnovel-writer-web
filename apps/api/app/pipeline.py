@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import (
-    Harness, ContextAgent, WriterAgent, ReviewAgent, DataAgent,
+    Harness, ContextAgent, WriterAgent, ReviewAgent, DataAgent, ContinuityAgent,
     AgentResult,
 )
 from app.agents.llm import LLMProvider
@@ -95,9 +95,21 @@ class WritingPipeline:
         contracts = self.story.get_all_contracts_for_writing(self.chapter_num)
         summaries = self.story.get_recent_summaries(self.chapter_num, count=5)
 
+        # Step 0: Continuity snapshot (before context)
+        continuity_data = {}
+        try:
+            continuity_data = await self._run_continuity()
+            plr.step_results.append({"step": "continuity", "result": continuity_data})
+        except Exception as e:
+            # Continuity is non-blocking; proceed with empty snapshot
+            plr.step_results.append({"step": "continuity", "result": {"error": str(e)}})
+
         # Step 1: Context
         ctx_result = await self._run_agent("context", self.context_agent.run(
-            chapter_outline=chapter_outline, contracts=contracts, summaries=summaries,
+            chapter_outline=chapter_outline,
+            contracts=contracts,
+            summaries=summaries,
+            continuity=continuity_data,
         ))
         if not ctx_result.success:
             plr.error = f"ContextAgent failed: {ctx_result.error}"
@@ -212,16 +224,95 @@ class WritingPipeline:
         await self.db.flush()
         return result
 
+    async def _run_continuity(self) -> dict:
+        """Fetch previous chapters/entities/commits and run ContinuityAgent."""
+        import json
+
+        # Fetch previous chapter texts
+        result = await self.db.execute(
+            select(Chapter)
+            .where(
+                Chapter.project_id == self.project_id,
+                Chapter.number < self.chapter_num,
+            )
+            .order_by(Chapter.number.desc())
+            .limit(3)
+        )
+        prev_chapters = result.scalars().all()
+        chapter_texts = [
+            {"number": ch.number, "title": ch.title, "content": ch.content or ""}
+            for ch in reversed(prev_chapters)
+        ]
+
+        # Fetch entities
+        entity_result = await self.db.execute(
+            select(Entity).where(Entity.project_id == self.project_id)
+        )
+        entities = entity_result.scalars().all()
+        entity_list = [
+            {"name": e.name, "type": e.entity_type, "description": e.description or ""}
+            for e in entities
+        ]
+
+        # Fetch foreshadowing
+        fs_result = await self.db.execute(
+            select(Foreshadowing).where(Foreshadowing.project_id == self.project_id)
+        )
+        foreshadowings = fs_result.scalars().all()
+        fs_list = [
+            {"id": f.id, "title": f.title, "status": f.status, "chapter_planted": f.chapter_planted}
+            for f in foreshadowings
+        ]
+
+        # Fetch recent commits
+        commit_result = await self.db.execute(
+            select(ChapterCommit)
+            .where(ChapterCommit.project_id == self.project_id)
+            .order_by(ChapterCommit.created_at.desc())
+            .limit(5)
+        )
+        commits = commit_result.scalars().all()
+        commit_list = [
+            {"chapter_number": c.chapter_number, "summary": c.summary or ""}
+            for c in commits
+        ]
+
+        if not chapter_texts and not entities and not foreshadowings:
+            return {"timeline_snapshot": "首章，无历史数据", "character_states": [], "active_foreshadowing": [], "pending_conflicts": [], "continuity_risks": [], "disambiguation_items": []}
+
+        continuity_agent = ContinuityAgent(llm=self.llm)
+        result = await continuity_agent.run(
+            project_id=self.project_id,
+            chapter_texts=chapter_texts,
+            entities=entity_list,
+            foreshadowing_items=fs_list,
+            recent_commits=commit_list,
+        )
+        if result.success and result.data:
+            return result.data.get("continuity_snapshot", {})
+        return {"error": result.error or "Continuity agent returned no data"}
+
     async def stream_draft(self, chapter_outline: str) -> AsyncIterator[str | dict]:
-        """SSE streaming: run context then stream writer output."""
+        """SSE streaming: run continuity then context then stream writer output."""
         self.ensure_llm_configured()
         contracts = self.story.get_all_contracts_for_writing(self.chapter_num)
         summaries = self.story.get_recent_summaries(self.chapter_num, count=5)
 
+        # Continuity snapshot
+        continuity_data = {}
+        try:
+            yield {"type": "status", "message": "正在分析前文连续性..."}
+            continuity_data = await self._run_continuity()
+        except Exception:
+            yield {"type": "status", "message": "连续性分析跳过，继续生成..."}
+
         yield {"type": "status", "message": "正在生成写作任务书..."}
 
         ctx_result = await self.context_agent.run(
-            chapter_outline=chapter_outline, contracts=contracts, summaries=summaries,
+            chapter_outline=chapter_outline,
+            contracts=contracts,
+            summaries=summaries,
+            continuity=continuity_data,
         )
         brief = chapter_outline
         if ctx_result.success:

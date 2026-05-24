@@ -662,3 +662,192 @@ async def get_graph_data(
     ]
 
     return {"nodes": nodes, "edges": edges, "timeline": timeline}
+
+
+# --- Checkpoint ---
+
+from app.agents.harness import Harness as HarnessClass
+
+
+@router.get("/pipeline/{chapter_id}/checkpoint")
+async def get_checkpoint(
+    chapter_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the latest checkpoint for a chapter's pipeline run."""
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    harness = HarnessClass(project.root_dir or ".")
+    cp = harness.latest_checkpoint(chapter_id)
+
+    if not cp:
+        return {"checkpoint": None}
+
+    return {
+        "checkpoint": {
+            "phase": cp.phase.value,
+            "flow": cp.flow.value,
+            "step": cp.step.value,
+            "chapter_id": cp.chapter_id,
+            "project_id": cp.project_id,
+            "payload": cp.payload,
+        }
+    }
+
+
+class ResumeCheckpointRequest(BaseModel):
+    step: str  # context | draft | review | extract | commit
+
+
+@router.post("/pipeline/{chapter_id}/checkpoint/resume")
+async def resume_from_checkpoint(
+    chapter_id: str,
+    body: ResumeCheckpointRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Resume a pipeline run from a specified step checkpoint.
+
+    Validates that a checkpoint exists for the given step and re-runs
+    the pipeline from that step onward.
+    """
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    harness = HarnessClass(project.root_dir or ".")
+    cp = harness.latest_checkpoint(chapter_id)
+
+    if not cp:
+        raise HTTPException(status_code=400, detail="No checkpoint found for this chapter")
+
+    valid_steps = {"context", "draft", "review", "extract", "commit"}
+    if body.step not in valid_steps:
+        raise HTTPException(status_code=400, detail=f"Invalid step. Valid: {', '.join(sorted(valid_steps))}")
+
+    # Re-create pipeline with user's LLM settings
+    pipeline = await WritingPipeline.create(
+        db=db,
+        project_root=project.root_dir or ".",
+        chapter_id=chapter_id,
+        project_id=project.id,
+        chapter_num=chapter.number,
+        user_id=current_user.id,
+    )
+
+    effective_outline = (chapter.outline or chapter.content or "").strip()
+    if not effective_outline:
+        raise HTTPException(status_code=400, detail="请先填写章纲后再恢复流水线")
+
+    # Run from the requested step
+    contracts = pipeline.story.get_all_contracts_for_writing(pipeline.chapter_num)
+    summaries = pipeline.story.get_recent_summaries(pipeline.chapter_num, count=5)
+    step_results = []
+    blocking_issues = []
+    chapter_text = ""
+
+    # Run continuity regardless
+    continuity_data = {}
+    try:
+        continuity_data = await pipeline._run_continuity()
+        step_results.append({"step": "continuity", "result": continuity_data})
+    except Exception as e:
+        step_results.append({"step": "continuity", "result": {"error": str(e)}})
+
+    if body.step == "context":
+        ctx_result = await pipeline._run_agent("context", pipeline.context_agent.run(
+            chapter_outline=effective_outline,
+            contracts=contracts, summaries=summaries,
+            continuity=continuity_data,
+        ))
+        if not ctx_result.success:
+            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": "", "error": f"ContextAgent failed: {ctx_result.error}"}
+        step_results.append({"step": "context", "result": ctx_result.data})
+
+        brief = ctx_result.data.get("brief", effective_outline)
+        draft_result = await pipeline._run_agent("writer", pipeline.writer_agent.run(brief=brief))
+        if not draft_result.success:
+            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": "", "error": f"WriterAgent failed: {draft_result.error}"}
+        chapter_text = draft_result.data.get("content", "")
+        step_results.append({"step": "draft", "result": draft_result.data})
+
+        review_result = await pipeline._run_agent("review", pipeline.review_agent.run(
+            chapter_content=chapter_text,
+            setting_json=contracts.get("master_setting", {}),
+            chapter_outline=effective_outline,
+        ))
+        if not review_result.success:
+            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": chapter_text, "error": f"ReviewAgent failed: {review_result.error}"}
+        issues = review_result.data.get("issues", [])
+        blocking_issues = [i for i in issues if i.get("severity") == "blocking"]
+        step_results.append({"step": "review", "result": review_result.data})
+
+        # Persist review issues
+        for issue in issues:
+            db.add(ReviewIssue(
+                chapter_id=chapter_id, project_id=project.id,
+                severity=issue.get("severity", "minor"),
+                category=issue.get("category", "unknown"),
+                title=issue.get("title", ""),
+                description=issue.get("description", ""),
+                evidence=issue.get("evidence", ""),
+                suggestion=issue.get("suggestion"),
+            ))
+
+        extract_result = await pipeline._run_agent("data", pipeline.data_agent.run(
+            chapter_content=chapter_text, chapter_outline=effective_outline,
+        ))
+        step_results.append({"step": "extract", "result": extract_result.data})
+
+        # Commit
+        commit_data = extract_result.data.get("data", {}) if extract_result.success else {}
+        db.add(ChapterCommit(
+            chapter_id=chapter_id, project_id=project.id,
+            content_json={"text": chapter_text, "outline": effective_outline},
+            state_changes=commit_data.get("state_changes", []),
+            new_entities=commit_data.get("new_entities", []),
+            new_relationships=commit_data.get("new_relationships", []),
+            foreshadowing_planted=commit_data.get("foreshadowing_planted", []),
+            foreshadowing_resolved=commit_data.get("foreshadowing_resolved", []),
+            summary=commit_data.get("summary", ""),
+        ))
+        pipeline.story.write_commit(pipeline.chapter_num, {
+            "version": 1, "content": chapter_text,
+            "state_changes": commit_data.get("state_changes", []),
+            "summary": commit_data.get("summary", ""),
+        })
+        pipeline.story.write_summary(pipeline.chapter_num, commit_data.get("summary", ""))
+        step_results.append({"step": "commit", "result": {"summary": commit_data.get("summary", "")}})
+
+        if blocking_issues:
+            chapter.status = "reviewing"
+        else:
+            chapter.status = "accepted"
+            chapter.content = chapter_text
+            from app.models.chapter import calculate_word_count
+            chapter.word_count = calculate_word_count(chapter_text)
+
+        await db.commit()
+        pipeline.story.write_review(pipeline.chapter_num, {"issues": issues})
+        harness.save_state({"phase": "writing", "last_chapter": pipeline.chapter_num})
+
+        return {"success": True, "step_results": step_results, "blocking_issues": blocking_issues, "chapter_text": chapter_text, "error": None}
+
+    # For non-context steps, return current state for the client to request through stream_draft
+    return {
+        "success": True,
+        "step_results": step_results,
+        "blocking_issues": [],
+        "chapter_text": chapter.content or "",
+        "error": None,
+        "message": f"Resumed checkpoint at step '{body.step}'. Use stream_draft for drafting.",
+    }
