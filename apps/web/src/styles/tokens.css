@@ -1,0 +1,101 @@
+/* NovelCraft Design Tokens — Editor Workbench Aesthetic */
+/* Dark-first, low-interference, long-read friendly */
+
+:root {
+  /* === Brand === */
+  --color-ink: hsl(220 20% 12%);
+  --color-ink-light: hsl(220 15% 18%);
+  --color-amber: hsl(38 92% 50%);
+  --color-amber-dim: hsl(38 92% 40%);
+  --color-emerald: hsl(152 60% 42%);
+  --color-emerald-dim: hsl(152 60% 32%);
+
+  /* === Neutral scale === */
+  --color-page: hsl(220 20% 8%);
+  --color-surface: hsl(220 18% 12%);
+  --color-surface-elevated: hsl(220 16% 16%);
+  --color-border: hsl(220 12% 22%);
+  --color-border-hover: hsl(220 12% 30%);
+  --color-muted: hsl(220 10% 54%);
+  --color-fg: hsl(220 20% 90%);
+  --color-fg-dim: hsl(220 10% 65%);
+
+  /* === Semantic === */
+  --color-danger: hsl(0 72% 51%);
+  --color-danger-bg: hsl(0 72% 51% / 0.12);
+  --color-warning: hsl(38 92% 50%);
+  --color-warning-bg: hsl(38 92% 50% / 0.12);
+  --color-success: hsl(152 60% 42%);
+  --color-success-bg: hsl(152 60% 42% / 0.12);
+  --color-info: hsl(212 72% 52%);
+  --color-info-bg: hsl(212 72% 52% / 0.12);
+
+  /* === Typography === */
+  --font-heading: "Noto Serif SC", "Instrument Serif", Georgia, serif;
+  --font-body: "Geist", "Source Han Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+
+  /* === Radius === */
+  --radius: 0.5rem;
+
+  /* === Shadows === */
+  --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.3);
+  --shadow-elevated: 0 4px 12px hsl(0 0% 0% / 0.4);
+  --shadow-dialog: 0 8px 32px hsl(0 0% 0% / 0.5);
+
+  /* === Shadcn CSS vars mapping === */
+  --background: var(--color-page);
+  --foreground: var(--color-fg);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-fg);
+  --popover: var(--color-surface-elevated);
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-amber);
+  --primary-foreground: var(--color-ink);
+  --secondary: var(--color-surface-elevated);
+  --secondary-foreground: var(--color-fg-dim);
+  --muted: var(--color-surface);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-amber);
+  --accent-foreground: var(--color-ink);
+  --destructive: var(--color-danger);
+  --destructive-foreground: var(--color-fg);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-amber);
+  --radius: 0.5rem;
+}
+
+.light {
+  --color-page: hsl(220 20% 97%);
+  --color-surface: hsl(220 20% 100%);
+  --color-surface-elevated: hsl(220 15% 95%);
+  --color-border: hsl(220 12% 88%);
+  --color-border-hover: hsl(220 12% 78%);
+  --color-muted: hsl(220 10% 52%);
+  --color-fg: hsl(220 20% 12%);
+  --color-fg-dim: hsl(220 10% 42%);
+
+  --background: var(--color-page);
+  --foreground: var(--color-fg);
+  --card: var(--color-surface);
+  --card-foreground: var(--color-fg);
+  --popover: var(--color-surface);
+  --popover-foreground: var(--color-fg);
+  --primary: var(--color-amber-dim);
+  --primary-foreground: var(--color-fg);
+  --secondary: var(--color-surface-elevated);
+  --secondary-foreground: var(--color-fg);
+  --muted: var(--color-surface-elevated);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-amber-dim);
+  --accent-foreground: var(--color-fg);
+  --destructive: var(--color-danger);
+  --border: var(--color-border);
+  --input: var(--color-border);
+  --ring: var(--color-amber-dim);
+
+  --shadow-card: 0 1px 3px hsl(0 0% 0% / 0.08);
+  --shadow-elevated: 0 4px 12px hsl(0 0% 0% / 0.1);
+  --shadow-dialog: 0 8px 32px hsl(0 0% 0% / 0.15);
+}

@@ -1,0 +1,12 @@
+{
+  "name": "novelcraft",
+  "private": true,
+  "packageManager": "pnpm@9.15.4",
+  "scripts": {
+    "dev:web": "pnpm --filter @novelcraft/web dev",
+    "dev:api": "pnpm --filter @novelcraft/api dev",
+    "build:web": "pnpm --filter @novelcraft/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
