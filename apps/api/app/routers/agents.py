@@ -1,6 +1,5 @@
-"""Agent pipeline endpoints — pipeline trigger, SSE streaming, review results."""
+"""Agent pipeline endpoints — pipeline trigger, SSE streaming, review results, architect, search."""
 
-import asyncio
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,12 +10,29 @@ from pydantic import BaseModel
 from jose import JWTError, jwt
 
 from app.database import get_db
-from app.models import User, Project, Chapter, ReviewIssue, AgentRun
-from app.services.auth import get_current_user, hash_password, verify_password, create_access_token
+from app.models import User, Project, Chapter, ReviewIssue, AgentRun, Entity, Card
+from app.services.auth import get_current_user
 from app.config import settings
 from app.pipeline import WritingPipeline
+from app.agents.architect import ArchitectAgent
+from app.search import SearchIndex
 
 router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
+
+
+# --- Request models ---
+
+class SynopsisRequest(BaseModel):
+    genre: str = ""
+    hook: str = ""
+    protagonist: dict = {}
+    world_building: dict = {}
+    power_system: str = ""
+
+
+class OutlineRequest(BaseModel):
+    volume: dict = {}
+    chapter_num: int = 1
 
 
 class RunPipelineRequest(BaseModel):
@@ -30,6 +46,95 @@ class PipelineStatusResponse(BaseModel):
     chapter_text: str
     error: str | None = None
 
+
+# --- Token helper for SSE ---
+
+async def _get_user_from_token(token_str: str, db: AsyncSession) -> User:
+    try:
+        payload = jwt.decode(token_str, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
+
+# --- Architect ---
+
+@router.post("/architect/synopsis/{project_id}")
+async def generate_synopsis(
+    project_id: str,
+    body: SynopsisRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    architect = ArchitectAgent()
+    result = await architect.synopsis({
+        "genre": body.genre, "hook": body.hook,
+        "protagonist": body.protagonist,
+        "world_building": body.world_building,
+        "power_system": body.power_system,
+    })
+    return result
+
+
+@router.post("/architect/outline/{project_id}")
+async def generate_outline(
+    project_id: str,
+    body: OutlineRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    architect = ArchitectAgent()
+    result = await architect.chapter_outline(
+        synopsis={}, volume=body.volume,
+        chapter_num=body.chapter_num, prev_summaries=None,
+    )
+    return result
+
+
+# --- Search ---
+
+@router.get("/search/{project_id}")
+async def search_project(
+    project_id: str,
+    q: str = Query(default=""),
+    filter: str = Query(default="entities"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await db.get(Project, project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    index = SearchIndex()
+    if filter in ("entities", "all"):
+        result = await db.execute(select(Entity).where(Entity.project_id == project_id))
+        for e in result.scalars().all():
+            index.index_entity(e)
+    if filter in ("cards", "all"):
+        result = await db.execute(select(Card).where(Card.project_id == project_id))
+        for c in result.scalars().all():
+            index.index_card(c)
+    if filter == "entities":
+        return index.search_entities(q)
+    elif filter == "cards":
+        return index.search_cards(q)
+    else:
+        return index.search_entities(q) + index.search_cards(q)
+
+
+# --- Pipeline ---
 
 @router.post("/pipeline/{chapter_id}", response_model=PipelineStatusResponse)
 async def run_pipeline(
@@ -62,20 +167,7 @@ async def run_pipeline(
     )
 
 
-async def _get_user_from_token(token_str: str, db: AsyncSession) -> User:
-    try:
-        payload = jwt.decode(token_str, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        user_id = payload.get("sub")
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="User not found")
-    return user
-
+# --- SSE Streaming ---
 
 @router.get("/pipeline/{chapter_id}/stream")
 async def stream_draft(
@@ -84,9 +176,7 @@ async def stream_draft(
     token: str = Query(default=""),
     db: AsyncSession = Depends(get_db),
 ):
-    # Support both query param token (EventSource) and Bearer header
     current_user = await _get_user_from_token(token, db) if token else None
-    # Fallback: try to use header-based auth
     if not current_user:
         raise HTTPException(status_code=401, detail="Token required as query param")
 
@@ -112,6 +202,8 @@ async def stream_draft(
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 
+
+# --- Agent Runs & Reviews ---
 
 @router.get("/runs/{project_id}")
 async def list_runs(
