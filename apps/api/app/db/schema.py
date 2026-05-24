@@ -16,6 +16,7 @@ from app.models import (  # noqa: F401 — register all models on metadata
     Project,
     Relationship,
     ReviewIssue,
+    ReviewMetric,
     SearchDoc,
     Summary,
     User,

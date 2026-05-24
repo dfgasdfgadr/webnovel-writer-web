@@ -3,6 +3,7 @@
 Flow: plan → context → draft → review → polish → extract → commit → backup
 """
 
+import json
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -13,12 +14,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents import (
-    Harness, ContextAgent, WriterAgent, ReviewAgent, DataAgent, ContinuityAgent,
-    AgentResult,
+    Harness, Step, ContextAgent, WriterAgent, ReviewAgent, DataAgent, ContinuityAgent,
+    PolishAgent, AgentResult,
 )
 from app.agents.llm import LLMProvider
 from app.models import (
-    Chapter, ChapterCommit, ReviewIssue, AgentRun, Entity, Relationship, Foreshadowing,
+    Chapter, ChapterCommit, ReviewIssue, ReviewMetric, AgentRun, Entity, Relationship, Foreshadowing,
+    DisambiguationItem, Summary,
 )
 from app.story_system import StorySystem
 
@@ -53,6 +55,7 @@ class WritingPipeline:
         self.context_agent = ContextAgent(llm=self.llm)
         self.writer_agent = WriterAgent(llm=self.llm)
         self.review_agent = ReviewAgent(llm=self.llm)
+        self.polish_agent = PolishAgent(llm=self.llm)
         self.data_agent = DataAgent(llm=self.llm)
         self.chapter_id = chapter_id
         self.project_id = project_id
@@ -115,6 +118,7 @@ class WritingPipeline:
             plr.error = f"ContextAgent failed: {ctx_result.error}"
             return plr
         plr.step_results.append({"step": "context", "result": ctx_result.data})
+        self.harness.advance_step(self.chapter_id, self.project_id, Step("context"), ctx_result.data)
 
         # Step 2: Draft
         brief = ctx_result.data.get("brief", chapter_outline)
@@ -125,6 +129,7 @@ class WritingPipeline:
         chapter_text = draft_result.data.get("content", "")
         plr.chapter_text = chapter_text
         plr.step_results.append({"step": "draft", "result": draft_result.data})
+        self.harness.advance_step(self.chapter_id, self.project_id, Step("draft"), draft_result.data)
 
         # Step 3: Review
         setting_json = contracts.get("master_setting", {})
@@ -137,6 +142,7 @@ class WritingPipeline:
         issues = review_result.data.get("issues", [])
         plr.blocking_issues = [i for i in issues if i.get("severity") == "blocking"]
         plr.step_results.append({"step": "review", "result": review_result.data})
+        self.harness.advance_step(self.chapter_id, self.project_id, Step("review"), review_result.data)
 
         # Persist review issues
         for issue in issues:
@@ -151,11 +157,51 @@ class WritingPipeline:
                 suggestion=issue.get("suggestion"),
             ))
 
+        # Persist 7-dim review metrics
+        metrics = review_result.data.get("review_metrics", {})
+        if metrics:
+            self.db.add(ReviewMetric(
+                chapter_id=self.chapter_id,
+                project_id=self.project_id,
+                consistency_score=int(metrics.get("consistency_score", 0)),
+                timeline_score=int(metrics.get("timeline_score", 0)),
+                coherence_score=int(metrics.get("coherence_score", 0)),
+                ooc_score=int(metrics.get("ooc_score", 0)),
+                logic_score=int(metrics.get("logic_score", 0)),
+                foreshadowing_score=int(metrics.get("foreshadowing_score", 0)),
+                ai_flavor_score=int(metrics.get("ai_flavor_score", 0)),
+                summary=review_result.data.get("summary", ""),
+            ))
+
+        # Step 3.5: Polish (non-blocking issues only, skip if blocking issues exist)
+        polish_result = None
+        if not plr.blocking_issues:
+            non_blocking = [i for i in issues if i.get("severity") != "blocking"]
+            if non_blocking:
+                try:
+                    polish_result = await self._run_agent("polish", self.polish_agent.run(
+                        chapter_content=chapter_text,
+                        issues=non_blocking,
+                    ))
+                    if polish_result.success:
+                        polish_data = polish_result.data.get("result", {})
+                        if polish_data.get("diff"):
+                            # Apply the first diff's after text as polished content
+                            chapter_text = polish_data["diff"][-1].get("after", chapter_text)
+                            plr.chapter_text = chapter_text
+                        plr.step_results.append({"step": "polish", "result": polish_data})
+                        self.harness.advance_step(self.chapter_id, self.project_id, Step("polish"), polish_data)
+                    else:
+                        plr.step_results.append({"step": "polish", "result": {"error": polish_result.error}})
+                except Exception as e:
+                    plr.step_results.append({"step": "polish", "result": {"error": str(e)}})
+
         # Step 4: Extract (runs regardless of blocking)
         extract_result = await self._run_agent("data", self.data_agent.run(
             chapter_content=chapter_text, chapter_outline=chapter_outline,
         ))
         plr.step_results.append({"step": "extract", "result": extract_result.data})
+        self.harness.advance_step(self.chapter_id, self.project_id, Step("extract"), extract_result.data)
 
         # Step 5: Commit
         commit_data = extract_result.data.get("data", {}) if extract_result.success else {}
@@ -178,6 +224,13 @@ class WritingPipeline:
             "summary": commit_data.get("summary", ""),
         })
         self.story.write_summary(self.chapter_num, commit_data.get("summary", ""))
+        # Persist chapter summary to DB
+        self.db.add(Summary(
+            project_id=self.project_id,
+            level="chapter",
+            scope_label=f"第{self.chapter_num}章",
+            content=commit_data.get("summary", ""),
+        ))
         plr.step_results.append({"step": "commit", "result": {"summary": commit_data.get("summary", "")}})
 
         # Update chapter status
@@ -289,8 +342,30 @@ class WritingPipeline:
             recent_commits=commit_list,
         )
         if result.success and result.data:
-            return result.data.get("continuity_snapshot", {})
+            snapshot = result.data.get("continuity_snapshot", {})
+            # Persist disambiguation items from the snapshot
+            await self._persist_disambiguation(snapshot)
+            return snapshot
         return {"error": result.error or "Continuity agent returned no data"}
+
+    async def _persist_disambiguation(self, continuity_data: dict) -> None:
+        """Persist disambiguation items from continuity snapshot to DB."""
+        items = continuity_data.get("disambiguation_items", [])
+        if not items:
+            return
+        for item in items:
+            alternatives_raw = item.get("alternatives", [])
+            alternatives_json = json.dumps(alternatives_raw, ensure_ascii=False) if isinstance(alternatives_raw, list) else str(alternatives_raw)
+            self.db.add(DisambiguationItem(
+                project_id=self.project_id,
+                chapter_id=self.chapter_id,
+                field_name=str(item.get("field_name", "")),
+                current_value=str(item.get("current_value", "")),
+                confidence=float(item.get("confidence", 0.5)),
+                alternatives=alternatives_json,
+                suggestion=str(item.get("suggestion") or ""),
+                status="pending",
+            ))
 
     async def stream_draft(self, chapter_outline: str) -> AsyncIterator[str | dict]:
         """SSE streaming: run continuity then context then stream writer output."""

@@ -325,6 +325,43 @@ export interface SummaryUpdateRequest {
   content?: string;
 }
 
+// ─── Review Metrics ───
+export interface ReviewMetricPublic {
+  id: string;
+  chapter_id: string;
+  project_id: string;
+  consistency_score: number;
+  timeline_score: number;
+  coherence_score: number;
+  ooc_score: number;
+  logic_score: number;
+  foreshadowing_score: number;
+  ai_flavor_score: number;
+  summary: string | null;
+  created_at: string;
+}
+
+// ─── Polish ───
+export interface PolishAxesResponse {
+  axes: Record<string, string>;
+}
+
+export interface PolishRequest {
+  issues: Array<Record<string, unknown>>;
+  enabled_axes?: string[] | null;
+  chapter_outline?: string;
+}
+
+export interface PolishResponse {
+  result: {
+    summary?: string;
+    diff?: Array<{ before: string; after: string; axis: string }>;
+    raw?: string;
+  };
+  token_input: number;
+  token_output: number;
+}
+
 // ─── API Wrappers ───
 export interface ApiError {
   detail: string;

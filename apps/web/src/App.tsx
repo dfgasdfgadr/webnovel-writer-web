@@ -15,6 +15,7 @@ import { GraphView } from "@/pages/GraphView";
 import { SimulationCenter } from "@/pages/SimulationCenter";
 import { ReviewPage } from "@/pages/ReviewPage";
 import { PlanningCenter } from "@/pages/PlanningCenter";
+import { DeepInitWizard } from "@/pages/DeepInitWizard";
 import { DisambiguationQueue } from "@/pages/DisambiguationQueue";
 
 const queryClient = new QueryClient({
@@ -66,6 +67,7 @@ export default function App() {
                 }
               >
                 <Route path="/" element={<ProjectHub />} />
+                <Route path="/projects/new/wizard" element={<DeepInitWizard />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/projects/:projectId" element={<ProjectDetail />} />
                 <Route path="/projects/:projectId/planning" element={<PlanningCenter />} />

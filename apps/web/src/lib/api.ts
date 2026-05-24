@@ -27,6 +27,10 @@ import type {
   SummaryPublic,
   SummaryCreateRequest,
   SummaryUpdateRequest,
+  ReviewMetricPublic,
+  PolishAxesResponse,
+  PolishRequest,
+  PolishResponse,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -59,6 +63,10 @@ export type {
   SummaryPublic,
   SummaryCreateRequest,
   SummaryUpdateRequest,
+  ReviewMetricPublic,
+  PolishAxesResponse,
+  PolishRequest,
+  PolishResponse,
 };
 
 const BASE_URL = "/api/v1";
@@ -278,6 +286,23 @@ export function resumeCheckpoint(chapterId: string, step: string) {
     method: "POST",
     body: JSON.stringify({ step }),
   });
+}
+
+// ---- Polish ----
+export function getPolishAxes() {
+  return request<PolishAxesResponse>("/agents/polish/axes");
+}
+
+export function polishChapter(chapterId: string, data: PolishRequest) {
+  return request<PolishResponse>(`/agents/polish/${chapterId}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ---- Review Metrics ----
+export function getReviewMetrics(chapterId: string) {
+  return request<ReviewMetricPublic[]>(`/agents/reviews/${chapterId}/metrics`);
 }
 
 // ---- Disambiguation ----

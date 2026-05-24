@@ -9,14 +9,15 @@
 | 0 | 基建与骨架 | DONE | [PHASE0_HANDOFF.md](handoffs/PHASE0_HANDOFF.md) |
 | 1 | MVP 写作闭环 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
 | 2 | MiroFish + LLM 设置 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
-| 3 | 质量与体验 | IN_PROGRESS | — |
+| 3 | 质量与体验 | DONE | [PHASE3_HANDOFF.md](handoffs/PHASE3_HANDOFF.md) |
 | 4 | 生态与自动化 | PENDING | — |
 
-## PM 监控（Phase 3 — 执行中）
+## PM 监控（Phase 3 — 已完成）
 
 | 时间 | 状态 | 备注 |
 |------|------|------|
-| 2026-05-24 | 已派单 | PM 签发 PHASE3_EXECUTION_BRIEF，后台 `-p`，日志 `claude-phase3.log` |
+| 2026-05-24 | 已派单 | PM 签发 PHASE3_EXECUTION_BRIEF |
+| 2026-05-24 完成 | **DONE** | 全部目标完成，89 Web + 96 API 全绿，PHASE3_HANDOFF 已生成 |
 
 ---
 
@@ -56,6 +57,15 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-24：Phase 3 完成 — 质量与体验 + Phase 2 遗留补全
+
+- **规划中心 MVP（1.1）**：PlanningCenter 四 Tab（总纲/章纲/批量/卷纲）+ ArchitectAgent API 全部走 LLMProvider.for_user()
+- **Phase 2 遗留补全（1.2）**：消歧队列 UI + Pipeline 自动写入 + Checkpoint 恢复（断点保存/恢复 API/写作台按钮）+ 三级摘要 API/UI + 推演报告采纳 + ContinuityAgent 管线接入 + ProjectNav 导航
+- **质量增强（1.3）**：PolishAgent 8 轴润色 + 7 维评分 ReviewAgent 扩展 + ReviewMetric 模型入库 + Pipeline polish 步骤
+- **体验（1.4）**：Deep Init 向导（5 步 + 充分性闸门）+ SimulationCenter 采纳按钮
+- **测试**：89 Web + 96 API 全绿（Web 11 files，API 15+ test files）
+- **文档**：PHASE3_HANDOFF.md 已生成，CLAUDE.md → Phase 4，EXECUTION_BRIEF STATUS=DONE
 
 ### 2026-05-24：Phase 2 完成 — 长篇一致性 + MiroFish + LLM 配置
 

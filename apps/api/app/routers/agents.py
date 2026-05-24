@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from jose import JWTError, jwt
 
 from app.database import get_db
-from app.models import User, Project, Chapter, ReviewIssue, AgentRun, Entity, Card, SearchDoc
+from app.models import User, Project, Chapter, ReviewIssue, ReviewMetric, AgentRun, Entity, Card, SearchDoc, Summary
 from app.services.auth import get_current_user
 from app.config import settings
 from app.pipeline import WritingPipeline
@@ -536,6 +536,40 @@ async def get_reviews(
     ]
 
 
+@router.get("/reviews/{chapter_id}/metrics")
+async def get_review_metrics(
+    chapter_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    result = await db.execute(
+        select(ReviewMetric).where(ReviewMetric.chapter_id == chapter_id).order_by(ReviewMetric.created_at.desc())
+    )
+    metrics = result.scalars().all()
+    return [
+        {
+            "id": m.id, "chapter_id": m.chapter_id, "project_id": m.project_id,
+            "consistency_score": m.consistency_score,
+            "timeline_score": m.timeline_score,
+            "coherence_score": m.coherence_score,
+            "ooc_score": m.ooc_score,
+            "logic_score": m.logic_score,
+            "foreshadowing_score": m.foreshadowing_score,
+            "ai_flavor_score": m.ai_flavor_score,
+            "summary": m.summary,
+            "created_at": m.created_at.isoformat() if m.created_at else None,
+        }
+        for m in metrics
+    ]
+
+
 # --- Continuity snapshot ---
 
 from app.agents.continuity import ContinuityAgent
@@ -664,9 +698,61 @@ async def get_graph_data(
     return {"nodes": nodes, "edges": edges, "timeline": timeline}
 
 
+# --- Polish ---
+
+from app.agents.polish import PolishAgent, POLISH_AXES
+
+
+class PolishRequest(BaseModel):
+    issues: list[dict]  # ReviewIssue items to fix
+    enabled_axes: list[str] | None = None  # axes to enable; None = all
+    chapter_outline: str = ""
+
+
+@router.get("/polish/axes")
+async def get_polish_axes():
+    """Return available polish axes with descriptions."""
+    return {"axes": {k: v for k, v in POLISH_AXES.items()}}
+
+
+@router.post("/polish/{chapter_id}")
+async def polish_chapter(
+    chapter_id: str,
+    body: PolishRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Polish a chapter based on specific review issues."""
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not chapter.content:
+        raise HTTPException(status_code=400, detail="Chapter has no content to polish")
+
+    if not body.issues:
+        raise HTTPException(status_code=400, detail="No issues provided for polish")
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    agent = PolishAgent(llm=llm)
+    result = await agent.run(
+        chapter_content=chapter.content,
+        issues=body.issues,
+        enabled_axes=body.enabled_axes,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=500, detail=f"Polish failed: {result.error or 'Unknown error'}")
+
+    return {"result": result.data.get("result", {}), "token_input": result.token_input, "token_output": result.token_output}
+
+
 # --- Checkpoint ---
 
-from app.agents.harness import Harness as HarnessClass
+from app.agents.harness import Harness as HarnessClass, Step
 
 
 @router.get("/pipeline/{chapter_id}/checkpoint")
@@ -703,6 +789,22 @@ async def get_checkpoint(
 
 class ResumeCheckpointRequest(BaseModel):
     step: str  # context | draft | review | extract | commit
+
+
+STEP_ORDER = ["context", "draft", "review", "extract", "commit"]
+
+
+def _steps_from(start_step: str) -> list[str]:
+    """Return the list of steps to execute starting from start_step."""
+    try:
+        idx = STEP_ORDER.index(start_step)
+    except ValueError:
+        return []
+    return STEP_ORDER[idx:]
+
+
+def _resume_error(step_results: list[dict], error: str) -> dict:
+    return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": "", "error": error}
 
 
 @router.post("/pipeline/{chapter_id}/checkpoint/resume")
@@ -751,47 +853,60 @@ async def resume_from_checkpoint(
     # Run from the requested step
     contracts = pipeline.story.get_all_contracts_for_writing(pipeline.chapter_num)
     summaries = pipeline.story.get_recent_summaries(pipeline.chapter_num, count=5)
-    step_results = []
-    blocking_issues = []
-    chapter_text = ""
+    step_results: list[dict] = []
+    blocking_issues: list[dict] = []
+    chapter_text: str = chapter.content or ""
 
-    # Run continuity regardless
-    continuity_data = {}
-    try:
-        continuity_data = await pipeline._run_continuity()
-        step_results.append({"step": "continuity", "result": continuity_data})
-    except Exception as e:
-        step_results.append({"step": "continuity", "result": {"error": str(e)}})
+    checkpoint_payload = cp.payload if cp else {}
+    steps_to_run = _steps_from(body.step)
 
-    if body.step == "context":
+    # Run continuity if starting from context or draft (need it for context)
+    continuity_data: dict = {}
+    if body.step in ("context", "draft"):
+        try:
+            continuity_data = await pipeline._run_continuity()
+            step_results.append({"step": "continuity", "result": continuity_data})
+        except Exception as e:
+            step_results.append({"step": "continuity", "result": {"error": str(e)}})
+
+    if "context" in steps_to_run:
         ctx_result = await pipeline._run_agent("context", pipeline.context_agent.run(
             chapter_outline=effective_outline,
             contracts=contracts, summaries=summaries,
             continuity=continuity_data,
         ))
         if not ctx_result.success:
-            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": "", "error": f"ContextAgent failed: {ctx_result.error}"}
+            return _resume_error(step_results, f"ContextAgent failed: {ctx_result.error}")
         step_results.append({"step": "context", "result": ctx_result.data})
+        pipeline.harness.advance_step(chapter_id, project.id, Step("context"), ctx_result.data)
 
-        brief = ctx_result.data.get("brief", effective_outline)
+    brief = effective_outline
+    if body.step in ("context", "draft") and step_results:
+        ctx_data = next((s["result"] for s in step_results if s["step"] == "context"), {})
+        brief = ctx_data.get("brief", effective_outline) if isinstance(ctx_data, dict) else effective_outline
+    elif "draft" in steps_to_run:
+        brief = checkpoint_payload.get("brief", effective_outline) if isinstance(checkpoint_payload, dict) else effective_outline
+
+    if "draft" in steps_to_run:
         draft_result = await pipeline._run_agent("writer", pipeline.writer_agent.run(brief=brief))
         if not draft_result.success:
-            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": "", "error": f"WriterAgent failed: {draft_result.error}"}
+            return _resume_error(step_results, f"WriterAgent failed: {draft_result.error}")
         chapter_text = draft_result.data.get("content", "")
         step_results.append({"step": "draft", "result": draft_result.data})
+        pipeline.harness.advance_step(chapter_id, project.id, Step("draft"), draft_result.data)
 
+    if "review" in steps_to_run:
         review_result = await pipeline._run_agent("review", pipeline.review_agent.run(
             chapter_content=chapter_text,
             setting_json=contracts.get("master_setting", {}),
             chapter_outline=effective_outline,
         ))
         if not review_result.success:
-            return {"success": False, "step_results": step_results, "blocking_issues": [], "chapter_text": chapter_text, "error": f"ReviewAgent failed: {review_result.error}"}
+            return _resume_error(step_results, f"ReviewAgent failed: {review_result.error}")
         issues = review_result.data.get("issues", [])
         blocking_issues = [i for i in issues if i.get("severity") == "blocking"]
         step_results.append({"step": "review", "result": review_result.data})
-
-        # Persist review issues
+        pipeline.harness.advance_step(chapter_id, project.id, Step("review"), review_result.data)
         for issue in issues:
             db.add(ReviewIssue(
                 chapter_id=chapter_id, project_id=project.id,
@@ -803,13 +918,16 @@ async def resume_from_checkpoint(
                 suggestion=issue.get("suggestion"),
             ))
 
+    if "extract" in steps_to_run:
         extract_result = await pipeline._run_agent("data", pipeline.data_agent.run(
             chapter_content=chapter_text, chapter_outline=effective_outline,
         ))
         step_results.append({"step": "extract", "result": extract_result.data})
+        pipeline.harness.advance_step(chapter_id, project.id, Step("extract"), extract_result.data)
 
-        # Commit
-        commit_data = extract_result.data.get("data", {}) if extract_result.success else {}
+    if "commit" in steps_to_run:
+        extract_data = next((s["result"] for s in step_results if s["step"] == "extract"), {})
+        commit_data = extract_data.get("data", {}) if extract_data.get("success", True) else {}
         db.add(ChapterCommit(
             chapter_id=chapter_id, project_id=project.id,
             content_json={"text": chapter_text, "outline": effective_outline},
@@ -826,6 +944,12 @@ async def resume_from_checkpoint(
             "summary": commit_data.get("summary", ""),
         })
         pipeline.story.write_summary(pipeline.chapter_num, commit_data.get("summary", ""))
+        db.add(Summary(
+            project_id=project.id,
+            level="chapter",
+            scope_label=f"第{pipeline.chapter_num}章",
+            content=commit_data.get("summary", ""),
+        ))
         step_results.append({"step": "commit", "result": {"summary": commit_data.get("summary", "")}})
 
         if blocking_issues:
@@ -836,18 +960,9 @@ async def resume_from_checkpoint(
             from app.models.chapter import calculate_word_count
             chapter.word_count = calculate_word_count(chapter_text)
 
-        await db.commit()
-        pipeline.story.write_review(pipeline.chapter_num, {"issues": issues})
+        pipeline.story.write_review(pipeline.chapter_num, {"issues": [s["result"].get("issues", []) for s in step_results if s["step"] == "review"][0] if any(s["step"] == "review" for s in step_results) else []})
         harness.save_state({"phase": "writing", "last_chapter": pipeline.chapter_num})
 
-        return {"success": True, "step_results": step_results, "blocking_issues": blocking_issues, "chapter_text": chapter_text, "error": None}
-
-    # For non-context steps, return current state for the client to request through stream_draft
-    return {
-        "success": True,
-        "step_results": step_results,
-        "blocking_issues": [],
-        "chapter_text": chapter.content or "",
-        "error": None,
-        "message": f"Resumed checkpoint at step '{body.step}'. Use stream_draft for drafting.",
-    }
+    await db.commit()
+    pipeline.harness.save_state({"phase": "writing", "last_chapter": pipeline.chapter_num})
+    return {"success": True, "step_results": step_results, "blocking_issues": blocking_issues, "chapter_text": chapter_text, "error": None}

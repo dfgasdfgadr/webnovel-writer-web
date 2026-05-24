@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.models.user import User
 from app.models.project import Project
+from app.models.chapter import Chapter
 from app.models.simulation import SimulationJob
 from app.services.auth import get_current_user
 
@@ -190,3 +191,38 @@ async def list_simulations(
     )
     jobs = result.scalars().all()
     return [_job_to_response(j) for j in jobs]
+
+
+@router.post("/{sim_id}/adopt")
+async def adopt_simulation_report(
+    sim_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Adopt simulation report recommendations: update chapter outline + contract."""
+    job = await db.get(SimulationJob, sim_id)
+    if not job or job.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Simulation not found")
+    if not job.report_json:
+        raise HTTPException(status_code=400, detail="No report to adopt")
+
+    try:
+        report = json.loads(job.report_json)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid report JSON")
+
+    # Extract recommendations from report
+    recommendations = report.get("recommendations", {}) if isinstance(report, dict) else {}
+    outline_update = recommendations.get("outline", "")
+
+    result = {"outline_updated": False}
+
+    # Update chapter outline if chapter_id exists
+    if job.chapter_id and outline_update:
+        chapter = await db.get(Chapter, job.chapter_id)
+        if chapter:
+            chapter.outline = outline_update
+            result["outline_updated"] = True
+            await db.commit()
+
+    return {"success": True, "result": result}

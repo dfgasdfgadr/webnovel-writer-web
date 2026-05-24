@@ -10,11 +10,12 @@ from app.models.simulation import SimulationJob
 from app.models.search_doc import SearchDoc
 from app.models.disambiguation import DisambiguationItem
 from app.models.summary import Summary
+from app.models.review_metric import ReviewMetric
 
 __all__ = [
     "User", "Project", "Chapter",
     "Card", "Entity", "Relationship", "Foreshadowing",
     "AgentRun", "ChapterCommit", "ReviewIssue",
     "UserLlmSettings", "SimulationJob", "SearchDoc",
-    "DisambiguationItem", "Summary",
+    "DisambiguationItem", "Summary", "ReviewMetric",
 ]

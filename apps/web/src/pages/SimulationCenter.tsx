@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Play, Loader2, CheckCircle, XCircle,
   AlertTriangle, RefreshCw, FlaskConical, GitBranch,
-  Clock, ChevronRight,
+  Clock, ChevronRight, ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -257,6 +257,25 @@ export function SimulationCenter() {
                       {simDetail.report && (
                         <div className="space-y-2">
                           <Separator />
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">推演报告</span>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs text-amber-400"
+                              onClick={async () => {
+                                try {
+                                  const res = await requestSimulations<{ success: boolean }>(`/${selectedSim}/adopt`, { method: "POST" });
+                                  if (res.success) toast.success("已采纳修订章纲");
+                                } catch (err) {
+                                  toast.error(err instanceof Error ? err.message : "采纳失败");
+                                }
+                              }}
+                            >
+                              <ClipboardCheck className="size-3 mr-1" />
+                              采纳修订章纲
+                            </Button>
+                          </div>
                           <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
                             {JSON.stringify(simDetail.report, null, 2)}
                           </pre>
