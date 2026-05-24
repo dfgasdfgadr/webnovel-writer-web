@@ -18,6 +18,7 @@ import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
 import { toast } from "sonner";
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 
 function MapIcon({ className }: { className?: string }) {
   return (
@@ -28,6 +29,13 @@ function MapIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
+const planningTabs = [
+  { id: "synopsis", label: "总纲", icon: BookOpen },
+  { id: "outline", label: "章纲", icon: ListChecks },
+  { id: "batch", label: "批量章纲", icon: Layers },
+  { id: "volume-plan", label: "卷纲规划", icon: MapIcon },
+] as const;
 
 export function PlanningCenter() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -145,22 +153,30 @@ export function PlanningCenter() {
         </div>
       </div>
 
-      <ProjectNav projectId={projectId!} active="planning" className="mb-6" />
+      <ProjectNav projectId={projectId!} active="planning" className="mb-4" />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="synopsis" className="gap-1.5">
-            <BookOpen className="size-4" />总纲
-          </TabsTrigger>
-          <TabsTrigger value="outline" className="gap-1.5">
-            <ListChecks className="size-4" />章纲
-          </TabsTrigger>
-          <TabsTrigger value="batch" className="gap-1.5">
-            <Layers className="size-4" />批量章纲
-          </TabsTrigger>
-          <TabsTrigger value="volume-plan" className="gap-1.5">
-            <MapIcon className="size-4" />卷纲规划
-          </TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} orientation="horizontal">
+        <TabsList
+          className="mb-6 h-auto w-full justify-start gap-2 bg-transparent p-0"
+          aria-label="规划功能"
+        >
+          {planningTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <TabsTrigger
+                key={tab.id}
+                value={tab.id}
+                className={cn(
+                  "h-auto flex-none gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors",
+                  "data-active:border-border data-active:bg-muted data-active:text-foreground data-active:shadow-none",
+                  "border-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                )}
+              >
+                <Icon className="size-4" />
+                {tab.label}
+              </TabsTrigger>
+            );
+          })}
         </TabsList>
 
         {/* Synopsis Tab */}
