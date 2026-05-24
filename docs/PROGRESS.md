@@ -14,12 +14,13 @@
 
 ## 当前阻塞
 
-- [ ] **P0 ChapterEditor 无限重渲染** — Too many re-renders，已派 Claude Code（2026-05-24）
+- [x] ~~**P0 ChapterEditor 无限重渲染**~~ → 已修复（useEffect 替代 render 内 setState + ChapterEditor.test.tsx 9 用例）
 - [x] ~~**P0 项目列表 500**~~ → 已修复（`app/db/schema.py` + `test_schema.py`）
 - [x] ~~**Phase 0/1 单元测试补债**~~ → 72 passed（后端 47 + 前端 25，api/auth store/LoginPage 全覆盖）
 
 ## 最近修复（2026-05-24）
 
+- **ChapterEditor 无限重渲染**：render 内 `setContent(chapter.content)` 违反 React 规则 → 改用 `useEffect([chapterId, chapter?.content])` 同步；新增 `ChapterEditor.test.tsx` 9 用例覆盖挂载/加载/空内容/骨架屏/工具栏
 - **项目列表 500**：Phase 1 新增 `projects.root_dir` 列，旧 SQLite 未迁移 → `app/db/schema.py` 启动时自动补列（含日志 + 异常保护）；新增 `test_schema.py` 回归单测（4 用例覆盖缺列/幂等/表不存在）
 
 **验证**：`pnpm test` — 72 passed（后端 47 + 前端 25，api/auth store/LoginPage 全覆盖）

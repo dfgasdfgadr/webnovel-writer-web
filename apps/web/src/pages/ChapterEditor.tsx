@@ -60,10 +60,13 @@ export function ChapterEditor() {
     enabled: !!chapterId,
   });
 
-  // Sync content when chapter loads
-  if (chapter && content === "" && chapterId) {
-    setContent(chapter.content);
-  }
+  // Sync content from chapter data (useEffect, not render body)
+  useEffect(() => {
+    if (chapter) {
+      setContent(chapter.content ?? "");
+    }
+    setOutline("");
+  }, [chapterId, chapter?.content]);
 
   const saveMutation = useMutation({
     mutationFn: (newContent: string) =>
