@@ -1,43 +1,37 @@
-# 当前任务 — Phase 3 执行中
+# 当前任务 — Phase 4 已完成
 
 > **角色分工**：PM（Cursor）签发执行简报 → Claude Code 读简报自主执行。
-> **当前状态**：Phase 3 **已派单** — Claude Code 后台 `-p` 执行
+> **当前状态**：Phase 4 **已完成** — 等待 Phase 5 简报签发
 
 ---
 
-## Phase 3 执行简报（已签发）
+## Phase 4 完成摘要
 
-**必读**：[`docs/briefs/PHASE3_EXECUTION_BRIEF.md`](briefs/PHASE3_EXECUTION_BRIEF.md)
+Phase 4「生态与自动化 + Init 对齐 Webnovel Writer」已全部完成，11 大任务全部交付：
 
-**范围摘要**：
-1. **规划中心 MVP** — Architect UI：总纲 / 单章章纲 / 批量章纲 / 滚动卷纲
-2. **Phase 2 遗留** — 消歧队列、Checkpoint 恢复、三级摘要、推演采纳、Continuity 接入流水线
-3. **质量增强** — PolishAgent（8 轴）、7 维 review_metrics、审查趋势图、按 issue 修复
-4. **Deep Init 向导** — 新建项目分步收集 + 充分性闸门
+- **Deep Init 完整升级**（P4-INIT01/02）：premise 持久化 + InitAgent AI 设定集生成 + 自动总纲 + 6 步向导 + idea_bank.json
+- **Story System 接线**（P4-SS01）：synopsis → MASTER_SETTING + 总纲.md；outline → chapter_contract
+- **Phase 3 质量债**：7 维趋势图（Recharts）+ Polish SSE + 消歧写回 + SummaryAgent
+- **WW 目录导入**（P4-F03）：扫描 API + 导入 API + DB 映射 + 文件复制
+- **生态基础设施**：工作流 DSL v1 + CLI + 插件系统
 
-**建议顺序**：git 整理 → 规划中心 → Continuity/Checkpoint → 消歧/摘要 → Polish/metrics → Deep Init
-
----
-
-## 启动 Claude Code
-
-```powershell
-cd c:\Users\flat-mirror\Desktop\mirofish
-claude --dangerously-skip-permissions --permission-mode bypassPermissions --effort high -p "$(Get-Content docs/briefs/PHASE3_EXECUTION_BRIEF.md -Raw)" --output-format text
-```
-
-日志：`claude-phase3.log`
+详细交付物见 [`docs/handoffs/PHASE4_HANDOFF.md`](handoffs/PHASE4_HANDOFF.md)
 
 ---
 
-## 已关闭（勿重复）
+## 下一步（Phase 5）
 
-- [x] Phase 0/1/2 基建、LLM 设置、MiroFish、图谱、审查中心
-- [x] ChapterEditor 无限重渲染 / 项目列表 500 / outline 持久化 / SSE 修复 / Settings 回显（PM 已修，Claude 先 commit）
+Phase 5 执行简报待 PM 签发。建议优先处理：
+
+1. API 测试稳定性（test DB 隔离 / 事务回滚）
+2. Deep Init AI 分步提问（SSE）+ DeconstructAgent UI 集成
+3. 前端 UI 管理面板（插件管理、工作流规则可视编辑）
+4. zip 上传导入 + 项目导出
+5. Prompt 工坊 v1 / ReaderPulseSim / Git 备份
 
 ---
 
 ## 强制规范
 
 - 读 `.claude-instructions.md` + `docs/TESTING.md`
-- Phase 完成 → `docs/handoffs/PHASE3_HANDOFF.md` + 简报 STATUS=DONE
+- Phase 完成 → `docs/handoffs/PHASE5_HANDOFF.md` + 简报 STATUS=DONE

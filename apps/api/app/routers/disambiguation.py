@@ -83,6 +83,38 @@ async def resolve_item(
     item.resolved_at = datetime.now(timezone.utc)
     await db.commit()
 
+    # Write-back to Story System when accepted
+    if body.status == "accepted" and project.root_dir:
+        try:
+            from app.story_system import StorySystem
+            from app.models.entity import Entity
+            ss = StorySystem(project.root_dir)
+            master = ss.master_setting()
+
+            # Update entity if the disambiguation field references one
+            entity_result = await db.execute(
+                select(Entity).where(
+                    Entity.project_id == project_id,
+                    Entity.name == item.field_name,
+                )
+            )
+            entity = entity_result.scalar_one_or_none()
+            if entity:
+                entity.description = item.current_value
+                await db.commit()
+
+            # Persist disambig resolution to story-system config
+            resolutions = master.get("disambiguation_resolutions", {})
+            resolutions[item.field_name] = {
+                "value": item.current_value,
+                "resolved_by": body.resolved_by,
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
+            }
+            master["disambiguation_resolutions"] = resolutions
+            ss.save_master_setting(master)
+        except Exception:
+            logger.exception("Failed to write back disambiguation to StorySystem")
+
     return {
         "id": item.id, "project_id": item.project_id, "chapter_id": item.chapter_id,
         "field_name": item.field_name, "current_value": item.current_value,

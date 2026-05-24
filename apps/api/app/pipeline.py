@@ -249,6 +249,20 @@ class WritingPipeline:
         await self.db.commit()
         self.story.write_review(self.chapter_num, {"issues": issues})
         self.harness.save_state({"phase": "writing", "last_chapter": self.chapter_num})
+
+        # Fire workflow trigger: onChapterAccepted
+        try:
+            from app.workflows.engine import WorkflowEngine, WorkflowTrigger
+            wf = WorkflowEngine()
+            await wf.fire(WorkflowTrigger.ON_CHAPTER_ACCEPTED, {
+                "chapter_id": self.chapter_id,
+                "project_id": self.project_id,
+                "chapter_num": self.chapter_num,
+                "status": chapter.status if chapter else "accepted",
+            })
+        except Exception:
+            logger.exception("Workflow trigger onChapterAccepted failed")
+
         plr.success = True
         return plr
 

@@ -118,6 +118,14 @@ export interface ProjectCreate {
   title: string;
   description?: string;
   genre?: string;
+  hook?: string;
+  protagonist?: Record<string, unknown>;
+  world_building?: Record<string, unknown>;
+  power_system?: string;
+  golden_finger?: string;
+  constraints?: string[];
+  target_words?: number;
+  target_chapters?: number;
 }
 
 export interface ProjectUpdate {

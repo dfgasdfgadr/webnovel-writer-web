@@ -139,7 +139,19 @@ export function listProjects() {
   return request<ProjectList>("/projects");
 }
 
-export function createProject(data: { title: string; description?: string; genre?: string }) {
+export function createProject(data: {
+  title: string;
+  description?: string;
+  genre?: string;
+  hook?: string;
+  protagonist?: Record<string, unknown>;
+  world_building?: Record<string, unknown>;
+  power_system?: string;
+  golden_finger?: string;
+  constraints?: string[];
+  target_words?: number;
+  target_chapters?: number;
+}) {
   return request<ProjectPublic>("/projects", {
     method: "POST",
     body: JSON.stringify(data),
@@ -159,6 +171,35 @@ export function updateProject(id: string, data: Record<string, unknown>) {
 
 export function deleteProject(id: string) {
   return request<void>(`/projects/${id}`, { method: "DELETE" });
+}
+
+// ---- Import ----
+export interface ImportScanResult {
+  valid: boolean;
+  source_path: string;
+  title: string;
+  errors: string[];
+  chapter_count: number;
+  settings_count: number;
+  has_synopsis: boolean;
+  has_story_system: boolean;
+  has_webnovel: boolean;
+  chapters_preview: Array<{ number: number; title: string; word_count: number }>;
+  settings_preview: string[];
+}
+
+export function scanImport(sourcePath: string) {
+  return request<ImportScanResult>("/projects/import/scan", {
+    method: "POST",
+    body: JSON.stringify({ source_path: sourcePath }),
+  });
+}
+
+export function executeImport(sourcePath: string, title?: string) {
+  return request<ProjectPublic>("/projects/import", {
+    method: "POST",
+    body: JSON.stringify({ source_path: sourcePath, title }),
+  });
 }
 
 // ---- Chapters ----
@@ -298,6 +339,12 @@ export function polishChapter(chapterId: string, data: PolishRequest) {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export function streamPolishUrl(chapterId: string): string {
+  const token = getToken();
+  const params = new URLSearchParams({ token: token || "" });
+  return `${BASE_URL}/agents/polish/${chapterId}/stream?${params.toString()}`;
 }
 
 // ---- Review Metrics ----

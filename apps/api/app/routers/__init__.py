@@ -8,5 +8,6 @@ from app.routers.settings import router as settings_router
 from app.routers.simulations import router as simulations_router
 from app.routers.disambiguation import router as disambiguation_router
 from app.routers.summaries import router as summaries_router
+from app.routers.plugins import router as plugins_router
 
-__all__ = ["auth_router", "projects_router", "chapters_router", "health_router", "agents_router", "cards_router", "settings_router", "simulations_router", "disambiguation_router", "summaries_router"]
+__all__ = ["auth_router", "projects_router", "chapters_router", "health_router", "agents_router", "cards_router", "settings_router", "simulations_router", "disambiguation_router", "summaries_router", "plugins_router"]

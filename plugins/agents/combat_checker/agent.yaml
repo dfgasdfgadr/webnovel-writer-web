@@ -1,0 +1,13 @@
+name: combat_checker
+display_name: 战斗合理性检查
+description: 检查章节中的战斗场景是否符合作品的力量体系和角色能力设定
+version: "0.1.0"
+author: NovelCraft
+enabled: true
+triggers:
+  - onChapterAccepted
+config:
+  strict_mode: false
+  check_power_scaling: true
+  check_ability_consistency: true
+entrypoint: combat_checker.py:CombatCheckerAgent

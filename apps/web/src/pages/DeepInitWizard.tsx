@@ -16,11 +16,16 @@ import { toast } from "sonner";
 import * as api from "@/lib/api";
 
 interface WizardData {
+  title: string;
   genre: string;
   hook: string;
   protagonist: { name: string; traits: string };
   world_building: { description: string; key_locations: string };
   power_system: string;
+  golden_finger: string;
+  constraints: string[];
+  target_words: number;
+  target_chapters: number;
 }
 
 const STEPS = [
@@ -28,6 +33,7 @@ const STEPS = [
   { key: "protagonist", label: "主角设定", icon: User },
   { key: "world", label: "世界观", icon: Globe },
   { key: "power", label: "力量体系", icon: Zap },
+  { key: "extras", label: "补充设定", icon: Sparkles },
   { key: "review", label: "确认创建", icon: Check },
 ];
 
@@ -39,12 +45,14 @@ function isStepComplete(data: WizardData, step: string): boolean {
     case "protagonist": return data.protagonist.name.trim().length > 0;
     case "world": return data.world_building.description.trim().length > 0;
     case "power": return data.power_system.trim().length > 0;
+    case "extras": return !!data.title.trim();
     default: return true;
   }
 }
 
 function gateCheck(data: WizardData): string[] {
   const missing: string[] = [];
+  if (!data.title.trim()) missing.push("书名");
   if (!data.genre.trim()) missing.push("题材");
   if (!data.hook.trim()) missing.push("核心卖点");
   if (!data.protagonist.name.trim()) missing.push("主角名");
@@ -55,20 +63,37 @@ export function DeepInitWizard() {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>({
+    title: "",
     genre: "",
     hook: "",
     protagonist: { name: "", traits: "" },
     world_building: { description: "", key_locations: "" },
     power_system: "",
+    golden_finger: "",
+    constraints: [],
+    target_words: 1000000,
+    target_chapters: 500,
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      const project = await api.createProject({ title: data.genre || "新项目", genre: data.genre, description: data.hook });
+      const project = await api.createProject({
+        title: data.title || data.genre || "新项目",
+        genre: data.genre,
+        description: data.hook,
+        hook: data.hook,
+        protagonist: { name: data.protagonist.name, traits: data.protagonist.traits },
+        world_building: { description: data.world_building.description, key_locations: data.world_building.key_locations },
+        power_system: data.power_system,
+        golden_finger: data.golden_finger,
+        constraints: data.constraints,
+        target_words: data.target_words,
+        target_chapters: data.target_chapters,
+      });
       return project;
     },
     onSuccess: (project) => {
-      toast.success("项目创建成功，跳转到规划中心");
+      toast.success("项目创建成功，AI 正在生成设定集与总纲...");
       navigate(`/projects/${project.id}/planning`);
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "创建失败"),
@@ -211,16 +236,64 @@ export function DeepInitWizard() {
             </div>
           )}
 
-          {/* Step 5: Review */}
+          {/* Step 5: Extras */}
           {step === 4 && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="bookTitle">书名 *</Label>
+                <Input
+                  id="bookTitle"
+                  value={data.title}
+                  onChange={(e) => update({ title: e.target.value })}
+                  placeholder="给你的作品取个名字"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="goldenFinger">金手指</Label>
+                <Input
+                  id="goldenFinger"
+                  value={data.golden_finger}
+                  onChange={(e) => update({ golden_finger: e.target.value })}
+                  placeholder="主角的特殊能力或优势（如系统、重生记忆等）"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="targetWords">目标字数</Label>
+                  <Input
+                    id="targetWords"
+                    type="number"
+                    value={data.target_words}
+                    onChange={(e) => update({ target_words: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="targetChapters">目标章数</Label>
+                  <Input
+                    id="targetChapters"
+                    type="number"
+                    value={data.target_chapters}
+                    onChange={(e) => update({ target_chapters: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">金手指和规模设定可后续在规划中心调整</p>
+            </div>
+          )}
+
+          {/* Step 6: Review */}
+          {step === 5 && (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground mb-3">确认以下设定后创建项目并进入规划中心：</p>
+              <p className="text-sm text-muted-foreground mb-3">确认以下设定后创建项目，AI 将自动生成设定集与总纲：</p>
               <div className="space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">书名</span><span>{data.title || <span className="text-red-400">未填写</span>}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">题材</span><span>{data.genre || <span className="text-red-400">未填写</span>}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">卖点</span><span>{data.hook || <span className="text-red-400">未填写</span>}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">主角</span><span>{data.protagonist.name || <span className="text-red-400">未填写</span>}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">世界观</span><span>{data.world_building.description ? `${data.world_building.description.slice(0, 30)}...` : <span className="text-red-400">未填写</span>}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">力量体系</span><span>{data.power_system || "未填写"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">金手指</span><span>{data.golden_finger || "未填写"}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">目标规模</span><span>{data.target_words?.toLocaleString() || 0} 字 / {data.target_chapters || 0} 章</span></div>
               </div>
               {gateCheck(data).length > 0 && (
                 <p className="text-xs text-amber-400 mt-2">
@@ -231,7 +304,7 @@ export function DeepInitWizard() {
           )}
         </CardContent>
 
-        <div className="flex items-center justify-between p-4 border-t">
+        <div className="flex items-center justify-between p-4 border-t" data-testid="wizard-footer">
           <Button
             variant="ghost"
             disabled={step === 0}

@@ -2,6 +2,8 @@
 
 import json
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -110,6 +112,35 @@ async def generate_synopsis(
     except Exception:
         logger.exception("Failed to persist synopsis for project %s", project_id)
 
+    # Wire Story System: save master setting
+    if project.root_dir:
+        try:
+            from app.story_system import StorySystem
+            ss = StorySystem(project.root_dir)
+            existing = ss.master_setting()
+            existing.update({
+                "title": project.title,
+                "genre": body.genre,
+                "hook": body.hook,
+                "synopsis": result.get("synopsis", ""),
+                "volumes": result.get("volumes", []),
+                "updated_at": project.updated_at.isoformat() if project.updated_at else "",
+            })
+            ss.save_master_setting(existing)
+            # Write 总纲.md
+            outline_dir = Path(project.root_dir) / "大纲"
+            outline_dir.mkdir(parents=True, exist_ok=True)
+            synopsis_text = result.get("synopsis", "")
+            synopsis_md = f"# {result.get('title', project.title)}\n\n"
+            synopsis_md += f"**题材**：{result.get('genre', body.genre)}\n\n"
+            synopsis_md += f"**核心卖点**：{result.get('hook', body.hook)}\n\n"
+            synopsis_md += f"## 故事概述\n\n{synopsis_text}\n\n## 分卷规划\n\n"
+            for vol in result.get("volumes", []):
+                synopsis_md += f"- **第{vol.get('num', '?')}卷 {vol.get('title', '')}**：{vol.get('summary', '')}（{vol.get('target_chapters', '?')}章）\n"
+            (outline_dir / "总纲.md").write_text(synopsis_md, encoding="utf-8")
+        except Exception:
+            logger.exception("Failed to wire StorySystem synopsis for project %s", project_id)
+
     return result
 
 
@@ -165,6 +196,23 @@ async def generate_outline(
         await db.commit()
     except Exception:
         logger.exception("Failed to persist outline for chapter %d in project %s", body.chapter_num, project_id)
+
+    # Wire Story System: save chapter contract
+    if project.root_dir:
+        try:
+            from app.story_system import StorySystem
+            ss = StorySystem(project.root_dir)
+            ss.save_chapter_contract(body.chapter_num, {
+                "title": result.get("title", f"第{body.chapter_num}章"),
+                "outline": result.get("outline", ""),
+                "must_cover_nodes": result.get("must_cover_nodes", []),
+                "forbidden_zones": result.get("forbidden_zones", []),
+                "key_characters": result.get("key_characters", []),
+                "target_words": result.get("target_words", 3000),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception:
+            logger.exception("Failed to wire StorySystem chapter contract for ch %d", body.chapter_num)
 
     return result
 
@@ -227,6 +275,23 @@ async def generate_batch_outlines(
                 )
                 db.add(chapter)
             await db.commit()
+
+            # Wire Story System: save chapter contract
+            if project.root_dir:
+                try:
+                    from app.story_system import StorySystem
+                    ss = StorySystem(project.root_dir)
+                    ss.save_chapter_contract(ch_num, {
+                        "title": result.get("title", f"第{ch_num}章"),
+                        "outline": result.get("outline", ""),
+                        "must_cover_nodes": result.get("must_cover_nodes", []),
+                        "forbidden_zones": result.get("forbidden_zones", []),
+                        "key_characters": result.get("key_characters", []),
+                        "target_words": result.get("target_words", 3000),
+                        "generated_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                except Exception:
+                    logger.exception("Failed to wire StorySystem chapter contract for ch %d", ch_num)
 
             results.append({"chapter_num": ch_num, "success": True, "data": result})
             completed += 1
@@ -748,6 +813,88 @@ async def polish_chapter(
         raise HTTPException(status_code=500, detail=f"Polish failed: {result.error or 'Unknown error'}")
 
     return {"result": result.data.get("result", {}), "token_input": result.token_input, "token_output": result.token_output}
+
+
+@router.get("/polish/{chapter_id}/stream")
+async def stream_polish(
+    chapter_id: str,
+    token: str = Query(default=""),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE streaming polish — processes issues one by one and streams diffs."""
+    current_user = await _get_user_from_token(token, db) if token else None
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Token required as query param")
+
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if not chapter.content:
+        raise HTTPException(status_code=400, detail="Chapter has no content to polish")
+
+    # Get review issues
+    from sqlalchemy import select as sa_select
+    result = await db.execute(
+        sa_select(ReviewIssue).where(
+            ReviewIssue.chapter_id == chapter_id,
+            ReviewIssue.is_fixed == False,
+        )
+    )
+    issues = result.scalars().all()
+    if not issues:
+        raise HTTPException(status_code=400, detail="No unfixed issues to polish")
+
+    issues_data = [
+        {
+            "id": i.id, "severity": i.severity, "category": i.category,
+            "title": i.title, "description": i.description,
+            "evidence": i.evidence, "suggestion": i.suggestion,
+        }
+        for i in issues
+    ]
+
+    async def generate():
+        llm = await LLMProvider.for_user(current_user.id, db)
+        agent = PolishAgent(llm=llm)
+
+        yield f"data: {json.dumps({'type': 'start', 'total_issues': len(issues_data)}, ensure_ascii=False)}\n\n"
+
+        for idx, issue in enumerate(issues_data):
+            try:
+                polish_result = await agent.run(
+                    chapter_content=chapter.content,
+                    issues=[issue],
+                    enabled_axes=None,
+                )
+                if polish_result.success:
+                    diff_data = polish_result.data.get("result", {})
+                    yield f"data: {json.dumps({'type': 'issue_done', 'index': idx + 1, 'issue_id': issue['id'], 'issue_title': issue['title'], 'diff': diff_data.get('diff', []), 'summary': diff_data.get('summary', '')}, ensure_ascii=False)}\n\n"
+
+                    # Update content incrementally
+                    for d in diff_data.get("diff", []):
+                        chapter.content = chapter.content.replace(d.get("before", ""), d.get("after", ""), 1)
+
+                    # Mark issue as fixed
+                    db_issue = await db.get(ReviewIssue, issue["id"])
+                    if db_issue:
+                        db_issue.is_fixed = True
+                    await db.commit()
+                else:
+                    yield f"data: {json.dumps({'type': 'issue_error', 'index': idx + 1, 'issue_id': issue['id'], 'error': polish_result.error}, ensure_ascii=False)}\n\n"
+            except Exception as e:
+                yield f"data: {json.dumps({'type': 'issue_error', 'index': idx + 1, 'issue_id': issue['id'], 'error': str(e)}, ensure_ascii=False)}\n\n"
+
+        yield f"data: {json.dumps({'type': 'done', 'updated_content': chapter.content}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # --- Checkpoint ---

@@ -8,6 +8,9 @@ from app.agents.data import DataAgent
 from app.agents.architect import ArchitectAgent
 from app.agents.continuity import ContinuityAgent
 from app.agents.polish import PolishAgent
+from app.agents.init import InitAgent
+from app.agents.summary import SummaryAgent
+from app.agents.deconstruct import DeconstructAgent
 
 __all__ = [
     "BaseAgent", "AgentResult",
@@ -15,4 +18,5 @@ __all__ = [
     "Harness", "Phase", "Flow", "Step", "Checkpoint",
     "ContextAgent", "WriterAgent", "ReviewAgent", "DataAgent",
     "ArchitectAgent", "ContinuityAgent", "PolishAgent",
+    "InitAgent", "SummaryAgent", "DeconstructAgent",
 ]

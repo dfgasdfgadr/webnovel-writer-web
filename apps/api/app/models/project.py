@@ -14,6 +14,7 @@ class Project(Base):
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     genre: Mapped[str | None] = mapped_column(String(50))
+    premise_json: Mapped[str | None] = mapped_column(Text)
     synopsis_json: Mapped[str | None] = mapped_column(Text)
     root_dir: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(20), default="active")  # active | archived

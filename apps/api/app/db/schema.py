@@ -57,6 +57,7 @@ def sync_sqlite_schema(conn: Connection) -> None:
         # (table, column, column_definition)
         ("projects", "root_dir", "root_dir VARCHAR(500) DEFAULT ''"),
         ("projects", "synopsis_json", "synopsis_json TEXT"),
+        ("projects", "premise_json", "premise_json TEXT"),
         ("chapters", "outline", "outline TEXT DEFAULT ''"),
     ]
 

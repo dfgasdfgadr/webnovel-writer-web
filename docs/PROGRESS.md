@@ -10,7 +10,17 @@
 | 1 | MVP 写作闭环 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
 | 2 | MiroFish + LLM 设置 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
 | 3 | 质量与体验 | DONE | [PHASE3_HANDOFF.md](handoffs/PHASE3_HANDOFF.md) |
-| 4 | 生态与自动化 | PENDING | — |
+| 4 | 生态与自动化 | DONE | [PHASE4_HANDOFF.md](handoffs/PHASE4_HANDOFF.md) |
+| 5 | 待规划 | PENDING | — |
+
+## PM 监控（Phase 4 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-24 | 已派单 | PM 签发 PHASE4_EXECUTION_BRIEF |
+| 2026-05-25 | **DONE** | 全部 11 任务完成，93 Web + API tests 全绿，PHASE4_HANDOFF 已生成，CLAUDE.md → Phase 5 |
+
+---
 
 ## PM 监控（Phase 3 — 已完成）
 
@@ -57,6 +67,17 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-25：Phase 4 完成 — 生态与自动化 + Init 对齐 Webnovel Writer
+
+- **Deep Init 最小修复/完整升级（1.0/1.2）**：premise_json 持久化 + root_dir 生成 + InitAgent AI 设定集（世界观/力量体系/主角卡）+ 自动总纲 + 6 步向导（书名/金手指/目标规模）+ MASTER_SETTING + idea_bank.json
+- **Story System 接线（1.0）**：Architect synopsis → MASTER_SETTING + 总纲.md；outline → chapter_contract JSON
+- **Phase 3 质量债（1.1）**：ReviewPage 7 维雷达图/趋势折线图（Recharts）+ PolishAgent SSE 流式润色 + 一键修复按钮 + diff 预览 + 消歧采纳写回 Story System + SummaryAgent 卷/弧级摘要
+- **WW 目录导入（1.3）**：ImportService 扫描 API + 导入 API + DB 映射 + 文件复制 + .webnovel 兼容
+- **生态基础设施（1.4）**：工作流 DSL v1（YAML 触发器 + onChapterAccepted/onProjectCreate）+ CLI v1（login/write/review/synopsis/import/list）+ 插件系统（agent.yaml 注册 + combat_checker 示例）
+- **DeconstructAgent**：参考书拆解（stub），提取可迁移模式，红线不写 canon
+- **测试**：93 Web + 14 API = 107 tests（Web 12 files + API 4 test suites）
+- **文档**：PHASE4_HANDOFF.md 已生成，CLAUDE.md → Phase 5，简报 STATUS=DONE
 
 ### 2026-05-24：Phase 3 完成 — 质量与体验 + Phase 2 遗留补全
 
