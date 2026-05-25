@@ -8,6 +8,27 @@ from pathlib import Path
 from typing import Any
 
 
+_UTF8 = "utf-8"
+
+
+def _read_json(path: Path) -> dict:
+    raw = path.read_bytes()
+    for enc in (_UTF8, "gbk", "cp936"):
+        try:
+            data = json.loads(raw.decode(enc))
+            if enc != _UTF8:
+                path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding=_UTF8)
+            return data
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+    raise ValueError(f"Failed to decode {path} as JSON (tried utf-8, gbk, cp936)")
+
+
+def _write_json(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding=_UTF8)
+
+
 class StorySystem:
     """Manages .story-system/ contract tree and CHAPTER_COMMIT projection chain."""
 
@@ -21,39 +42,29 @@ class StorySystem:
     def master_setting(self) -> dict:
         path = self.ss_dir / "MASTER_SETTING.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return _read_json(path)
         return {}
 
     def save_master_setting(self, data: dict) -> None:
-        (self.ss_dir / "MASTER_SETTING.json").write_text(
-            json.dumps(data, ensure_ascii=False, indent=2)
-        )
+        _write_json(self.ss_dir / "MASTER_SETTING.json", data)
 
     def volume_contract(self, vol_num: int) -> dict:
         path = self.ss_dir / "volumes" / f"volume_{vol_num:03d}.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return _read_json(path)
         return {}
 
     def save_volume_contract(self, vol_num: int, data: dict) -> None:
-        vdir = self.ss_dir / "volumes"
-        vdir.mkdir(parents=True, exist_ok=True)
-        (vdir / f"volume_{vol_num:03d}.json").write_text(
-            json.dumps(data, ensure_ascii=False, indent=2)
-        )
+        _write_json(self.ss_dir / "volumes" / f"volume_{vol_num:03d}.json", data)
 
     def chapter_contract(self, chapter_num: int) -> dict:
         path = self.ss_dir / "chapters" / f"chapter_{chapter_num:03d}.json"
         if path.exists():
-            return json.loads(path.read_text())
+            return _read_json(path)
         return {}
 
     def save_chapter_contract(self, chapter_num: int, data: dict) -> None:
-        cdir = self.ss_dir / "chapters"
-        cdir.mkdir(parents=True, exist_ok=True)
-        (cdir / f"chapter_{chapter_num:03d}.json").write_text(
-            json.dumps(data, ensure_ascii=False, indent=2)
-        )
+        _write_json(self.ss_dir / "chapters" / f"chapter_{chapter_num:03d}.json", data)
 
     # --- CHAPTER_COMMIT ---
 
@@ -61,14 +72,14 @@ class StorySystem:
         cdir = self.ss_dir / "commits"
         cdir.mkdir(parents=True, exist_ok=True)
         commit_path = cdir / f"chapter_{chapter_num:03d}.commit.json"
-        commit_path.write_text(json.dumps(commit_data, ensure_ascii=False, indent=2))
+        commit_path.write_text(json.dumps(commit_data, ensure_ascii=False, indent=2), encoding=_UTF8)
         return commit_path
 
     def write_review(self, chapter_num: int, review_data: dict) -> Path:
         rdir = self.ss_dir / "reviews"
         rdir.mkdir(parents=True, exist_ok=True)
         review_path = rdir / f"chapter_{chapter_num:03d}.review.json"
-        review_path.write_text(json.dumps(review_data, ensure_ascii=False, indent=2))
+        review_path.write_text(json.dumps(review_data, ensure_ascii=False, indent=2), encoding=_UTF8)
         return review_path
 
     # --- Summaries ---

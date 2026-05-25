@@ -30,7 +30,11 @@ class PluginLoader:
     """Scans and loads plugins from the plugins/ directory."""
 
     def __init__(self, plugins_dir: str = ""):
-        self.plugins_dir = Path(plugins_dir) if plugins_dir else Path.cwd() / "plugins"
+        if plugins_dir:
+            self.plugins_dir = Path(plugins_dir)
+        else:
+            # plugins/ lives at repo root; this file is at apps/api/app/services/
+            self.plugins_dir = Path(__file__).resolve().parents[4] / "plugins"
         self.plugins: dict[str, PluginInfo] = {}
 
     def scan(self) -> list[PluginInfo]:

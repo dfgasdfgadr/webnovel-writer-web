@@ -26,7 +26,13 @@ def _slugify(title: str) -> str:
     slug = title.strip().lower()
     slug = re.sub(r'[^\w\s-]', '', slug)
     slug = re.sub(r'[\s_]+', '-', slug)
-    return slug[:50] or "untitled"
+    slug = slug.strip("-")
+    # Fallback: if slug is empty after all processing, use a stable short hash
+    if not slug:
+        import hashlib
+        short = hashlib.sha256(title.encode()).hexdigest()[:8]
+        slug = f"project-{short}"
+    return slug[:50]
 
 
 def _ensure_dir_skeleton(root_dir: str) -> None:
@@ -42,32 +48,81 @@ def _ensure_dir_skeleton(root_dir: str) -> None:
         Path(root_dir, d).mkdir(parents=True, exist_ok=True)
 
 
-async def _generate_settings_from_premise(premise: dict, user_id: str, db: AsyncSession) -> dict:
-    """Use InitAgent to generate world-building, power-system, and protagonist card."""
+async def _generate_settings_from_premise(premise: dict, user_id: str, db: AsyncSession) -> tuple[dict, list[str]]:
+    """Use InitAgent to generate world-building, power-system, and protagonist card.
+    Returns (settings_data, warnings). On LLM failure, returns stub data from premise."""
     from app.agents.init import InitAgent
     from app.agents.llm import LLMProvider
 
     try:
         llm = await LLMProvider.for_user(user_id, db)
         agent = InitAgent(llm=llm)
-        return await agent.generate_settings(premise)
+        return await agent.generate_settings(premise), []
     except Exception:
         logger.exception("InitAgent settings generation failed")
-        return {}
+        stub = _build_stub_settings(premise)
+        return stub, ["AI 生成失败，已使用项目预设信息创建基础设定文件，请检查 LLM 配置"]
 
 
-async def _generate_synopsis_from_premise(premise: dict, user_id: str, db: AsyncSession) -> dict:
-    """Use ArchitectAgent to generate synopsis from premise."""
+def _build_stub_settings(premise: dict) -> dict:
+    """Build stub setting content from premise data when LLM is unavailable."""
+    protagonist = premise.get("protagonist", {})
+    return {
+        "world_building": (
+            f"# 世界观\n\n"
+            f"题材：{premise.get('genre', '未设定')}\n\n"
+            f"## 故事核心\n{premise.get('hook', '（待补充）')}\n\n"
+            f"## 世界背景\n（待 AI 生成补充）\n"
+        ),
+        "power_system": (
+            f"# 力量体系\n\n"
+            f"{premise.get('power_system', '（待设定）') or '（待设定）'}\n\n"
+            f"金手指：{premise.get('golden_finger', '（待设定）') or '（待设定）'}\n"
+        ),
+        "protagonist_card": (
+            f"# 主角卡\n\n"
+            f"姓名：{protagonist.get('name', '（待设定）')}\n\n"
+            f"性别：{protagonist.get('gender', '（待设定）')}\n\n"
+            f"年龄：{protagonist.get('age', '（待设定）')}\n\n"
+            f"性格：{protagonist.get('personality', '（待设定）')}\n\n"
+            f"背景：{protagonist.get('background', '（待设定）')}\n\n"
+            f"目标：{protagonist.get('goal', '（待设定）')}\n"
+        ),
+    }
+
+
+async def _generate_synopsis_from_premise(premise: dict, user_id: str, db: AsyncSession) -> tuple[dict, list[str]]:
+    """Use ArchitectAgent to generate synopsis from premise.
+    Returns (synopsis_data, warnings). On LLM failure, returns stub synopsis."""
     from app.agents.architect import ArchitectAgent
     from app.agents.llm import LLMProvider
 
     try:
         llm = await LLMProvider.for_user(user_id, db)
         architect = ArchitectAgent(llm=llm)
-        return await architect.synopsis(premise)
+        return await architect.synopsis(premise), []
     except Exception:
         logger.exception("ArchitectAgent synopsis generation failed")
-        return {}
+        stub = _build_stub_synopsis(premise)
+        return stub, []
+
+
+def _build_stub_synopsis(premise: dict) -> dict:
+    """Build a stub synopsis from premise data when LLM is unavailable."""
+    return {
+        "title": premise.get("title", "未命名"),
+        "genre": premise.get("genre", ""),
+        "hook": premise.get("hook", ""),
+        "synopsis": f"（AI 总纲生成暂不可用。核心设定：{premise.get('genre', '未知题材')}，{premise.get('hook', '')}。请配置 LLM 后重新生成。）",
+        "volumes": [
+            {
+                "num": 1,
+                "title": "第一卷",
+                "summary": "（待生成）",
+                "target_chapters": premise.get("target_chapters", 30) or 30,
+            }
+        ],
+    }
 
 
 def _write_settings_files(root_dir: str, settings_data: dict) -> list[str]:
@@ -146,11 +201,12 @@ async def create_project(
     _ensure_dir_skeleton(root_dir)
 
     # Generate settings files via InitAgent
-    settings_data = await _generate_settings_from_premise(premise, current_user.id, db)
+    settings_data, settings_warnings = await _generate_settings_from_premise(premise, current_user.id, db)
     written_files = _write_settings_files(root_dir, settings_data)
 
     # Generate synopsis via ArchitectAgent
-    synopsis_data = await _generate_synopsis_from_premise(premise, current_user.id, db)
+    synopsis_data, synopsis_warnings = await _generate_synopsis_from_premise(premise, current_user.id, db)
+    all_warnings = settings_warnings + synopsis_warnings
 
     if synopsis_data:
         project.synopsis_json = json.dumps(synopsis_data, ensure_ascii=False)
@@ -218,7 +274,7 @@ async def create_project(
         pass
 
     await db.commit()
-    return _project_public(project)
+    return _project_public(project, warnings=all_warnings)
 
 
 @router.get("/{project_id}", response_model=ProjectPublic)
@@ -301,7 +357,7 @@ async def import_project(
 ):
     """Import a project from a local directory (cyDemo/WW style)."""
     from app.services.import_project import scan_directory, copy_to_project
-    from app.models.chapter import Chapter as ChapterModel
+    from app.models.chapter import Chapter as ChapterModel, calculate_word_count
     from app.models.card import Card
 
     scan = scan_directory(body.source_path)
@@ -340,7 +396,7 @@ async def import_project(
             title=ch["title"],
             number=ch["number"],
             content=ch["content"],
-            word_count=ch["word_count"],
+            word_count=calculate_word_count(ch["content"]),
             status="accepted",
         )
         db.add(chapter)
@@ -350,8 +406,8 @@ async def import_project(
         card = Card(
             project_id=project.id,
             card_type="setting",
-            title=sf["name"],
-            content_json={"text": sf["content"], "filename": sf["filename"]},
+            label=sf["name"],
+            content={"text": sf["content"], "filename": sf["filename"]},
         )
         db.add(card)
 
@@ -367,7 +423,7 @@ async def import_project(
         ss = StorySystem(root_dir)
         imported_master_path = Path(root_dir) / ".story-system" / "MASTER_SETTING.json"
         if imported_master_path.exists():
-            existing = json.loads(imported_master_path.read_text())
+            existing = json.loads(imported_master_path.read_text(encoding="utf-8"))
             ss.save_master_setting(existing)
         else:
             ss.save_master_setting({
@@ -393,7 +449,7 @@ async def _get_owned_project(project_id: str, user_id: str, db: AsyncSession) ->
     return project
 
 
-def _project_public(p: Project) -> ProjectPublic:
+def _project_public(p: Project, warnings: list[str] | None = None) -> ProjectPublic:
     return ProjectPublic(
         id=p.id,
         title=p.title,
@@ -403,6 +459,7 @@ def _project_public(p: Project) -> ProjectPublic:
         owner_id=p.owner_id,
         synopsis_json=p.synopsis_json,
         root_dir=p.root_dir,
+        warnings=warnings or [],
         created_at=p.created_at.isoformat(),
         updated_at=p.updated_at.isoformat(),
     )

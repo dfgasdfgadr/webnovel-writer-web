@@ -41,7 +41,6 @@ def _sqlite_add_column_if_missing(conn: Connection, table: str, column: str, col
     if column not in existing:
         logger.info("Migrating %s.%s: adding column", table, column)
         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col_def}"))
-        conn.commit()
 
 
 def sync_sqlite_schema(conn: Connection) -> None:

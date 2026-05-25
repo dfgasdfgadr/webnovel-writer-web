@@ -1,0 +1,28 @@
+{
+  "next_volume_anchor": {
+    "volume": 2,
+    "volume_name": "待定",
+    "core_conflict": "封不觉被迫离开诊室在外部调查，污染加深到中度（能触摸灵体），搭档的过去逐步揭露，组织正式追猎。韩铎的中立立场接受考验。",
+    "volume_end_climax": "封不觉第一次主动使用灵媒能力对抗组织成员，人格渗漏第一次发生——他开始说一个死者说过的话。"
+  },
+  "foreshadow_writeback": [
+    {"content": "不说话的患者首次出现（不说话，只留下执念物品）", "buried_chapter": "第1章", "payoff_chapter": "", "level": "主线"},
+    {"content": "封不觉七岁照片'第六面，已确认'", "buried_chapter": "第15章", "payoff_chapter": "", "level": "主线"},
+    {"content": "搭档'已死亡'的原因——组织将其社会记录标记为死亡", "buried_chapter": "第15章", "payoff_chapter": "第80-100章", "level": "人物线"},
+    {"content": "组织通过'督导'第一次正面接触封不觉", "buried_chapter": "第30章", "payoff_chapter": "", "level": "主线"},
+    {"content": "封不觉是被'制造'的灵媒（非天生）——第六批实验品", "buried_chapter": "第47章", "payoff_chapter": "第200+章", "level": "主线"},
+    {"content": "诊所主任对封不觉状态的异常关注", "buried_chapter": "第38章", "payoff_chapter": "第2卷", "level": "支线"},
+    {"content": "封不觉手背上的'醒'字——女孩留下的保护标记", "buried_chapter": "第37章/第73章", "payoff_chapter": "", "level": "主线"},
+    {"content": "韩铎——组织中立灵媒，寻找那个女孩", "buried_chapter": "第59-60章", "payoff_chapter": "", "level": "人物线"},
+    {"content": "'钥匙'——封不觉是唯一能打开里世界门的'对照'", "buried_chapter": "第48-49章", "payoff_chapter": "最终卷", "level": "主线"},
+    {"content": "第六批实验的'目标'女孩——她嵌入了里世界", "buried_chapter": "第50/73/75章", "payoff_chapter": "", "level": "主线"},
+    {"content": "不说话的患者在门后的无边诊室里——他是谁？", "buried_chapter": "第75章", "payoff_chapter": "", "level": "主线"},
+    {"content": "诊室钟——每完成一个执念分针走一格，走完一圈门会开", "buried_chapter": "第71章", "payoff_chapter": "", "level": "主线"}
+  ],
+  "open_loop_writeback": [
+    {"content": "搭档被组织扣押为人质——每三个月需提供'活着的证据'", "buried_chapter": "第72章", "payoff_chapter": "", "level": "持续开放环"},
+    {"content": "诊室内滞留29个未完成灵体——需在后续章节逐一完成", "buried_chapter": "第66章", "payoff_chapter": "", "level": "持续开放环"},
+    {"content": "组织与封不觉的博弈——'不找那个女孩'的协议是否会被打破", "buried_chapter": "第72章", "payoff_chapter": "", "level": "持续开放环"},
+    {"content": "女孩在里世界等封不觉——如何'找'她而不被组织发现", "buried_chapter": "第71-75章", "payoff_chapter": "", "level": "持续开放环"}
+  ]
+}

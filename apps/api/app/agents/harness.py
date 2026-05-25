@@ -47,6 +47,9 @@ class Checkpoint:
     payload: dict = field(default_factory=dict)
 
 
+_UTF8 = "utf-8"
+
+
 class Harness:
     """Deterministic state machine: LLM only produces content, Harness decides next step."""
 
@@ -58,12 +61,12 @@ class Harness:
 
     def load_state(self) -> dict:
         if self.state_path.exists():
-            return json.loads(self.state_path.read_text())
+            return json.loads(self.state_path.read_text(encoding=_UTF8))
         return {"phase": Phase.init.value, "active_flows": [], "chapter_index": 0}
 
     def save_state(self, state: dict) -> None:
         self.state_path.parent.mkdir(parents=True, exist_ok=True)
-        self.state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
+        self.state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding=_UTF8)
 
     def advance_step(self, chapter_id: str, project_id: str, current_step: Step, result: dict) -> Checkpoint:
         next_step = self._next_step(current_step)
@@ -95,14 +98,15 @@ class Harness:
                 "chapter_id": cp.chapter_id,
                 "project_id": cp.project_id,
                 "payload": cp.payload,
-            }, ensure_ascii=False, indent=2, default=str)
+            }, ensure_ascii=False, indent=2, default=str),
+            encoding=_UTF8,
         )
 
     def latest_checkpoint(self, chapter_id: str) -> Checkpoint | None:
         files = sorted(self.checkpoint_dir.glob(f"{chapter_id}_*.json"))
         if not files:
             return None
-        data = json.loads(files[-1].read_text())
+        data = json.loads(files[-1].read_text(encoding=_UTF8))
         return Checkpoint(
             phase=Phase(data["phase"]),
             flow=Flow(data["flow"]),

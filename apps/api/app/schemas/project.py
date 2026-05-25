@@ -32,6 +32,7 @@ class ProjectPublic(BaseModel):
     owner_id: str
     synopsis_json: str | None = None
     root_dir: str | None = None
+    warnings: list[str] = []
     created_at: str
     updated_at: str
 

@@ -37,6 +37,7 @@ export interface ProjectPublic {
   volume_label?: string | null;
   root_dir?: string | null;
   synopsis_json?: string | null;
+  warnings?: string[];
   created_at: string;
   updated_at: string;
 }

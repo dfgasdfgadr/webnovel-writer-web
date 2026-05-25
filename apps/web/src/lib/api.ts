@@ -112,15 +112,26 @@ export function login(username: string, password: string) {
   const formData = new URLSearchParams();
   formData.set("username", username);
   formData.set("password", password);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
   return fetch(`${BASE_URL}/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: formData,
-  }).then(async (res) => {
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Login failed");
-    return data as TokenResponse;
-  });
+    signal: controller.signal,
+  })
+    .then(async (res) => {
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Login failed");
+      return data as TokenResponse;
+    })
+    .catch((err) => {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("登录超时：请确认后端已启动（pnpm dev:api）");
+      }
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 export function register(username: string, password: string, displayName?: string) {
@@ -249,6 +260,13 @@ export function streamDraftUrl(chapterId: string, outline: string): string {
 
 export function getReviews(chapterId: string) {
   return request<ReviewIssue[]>(`/agents/reviews/${chapterId}`);
+}
+
+export function runReview(chapterId: string, data?: { content?: string; outline?: string }) {
+  return request<ReviewIssue[]>(`/agents/reviews/${chapterId}/run`, {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
 }
 
 export function listAgentRuns(projectId: string) {

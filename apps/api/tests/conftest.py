@@ -3,15 +3,16 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy import text
+from sqlalchemy.pool import StaticPool
 
-os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./test_novelcraft.db"
+# File-based SQLite with StaticPool to prevent lock conflicts on repeated/parallel runs
+TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_novelcraft.db"
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from app.main import app
 from app.database import Base, get_db
 
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_novelcraft.db"
-
-engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=StaticPool)
 TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

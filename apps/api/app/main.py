@@ -11,9 +11,14 @@ from app.routers import auth_router, projects_router, chapters_router, health_ro
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
+    # SQLite DDL inside engine.begin() can deadlock with aiosqlite on Windows.
+    async with engine.connect() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(sync_sqlite_schema)
+        await conn.commit()
+    # Initialize plugin loader at startup
+    from app.services.plugin_loader import get_plugin_loader
+    get_plugin_loader(settings.plugins_dir)
     yield
 
 

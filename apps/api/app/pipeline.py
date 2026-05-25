@@ -317,7 +317,7 @@ class WritingPipeline:
         )
         entities = entity_result.scalars().all()
         entity_list = [
-            {"name": e.name, "type": e.entity_type, "description": e.description or ""}
+            {"name": e.label, "type": e.entity_type, "description": str((e.attributes or {}).get("description", ""))}
             for e in entities
         ]
 
@@ -327,7 +327,12 @@ class WritingPipeline:
         )
         foreshadowings = fs_result.scalars().all()
         fs_list = [
-            {"id": f.id, "title": f.title, "status": f.status, "chapter_planted": f.chapter_planted}
+            {
+                "id": f.id,
+                "title": (f.description or "")[:80],
+                "status": f.status,
+                "chapter_planted": f.planted_in_chapter_id,
+            }
             for f in foreshadowings
         ]
 
@@ -340,7 +345,7 @@ class WritingPipeline:
         )
         commits = commit_result.scalars().all()
         commit_list = [
-            {"chapter_number": c.chapter_number, "summary": c.summary or ""}
+            {"chapter_id": c.chapter_id, "summary": c.summary or ""}
             for c in commits
         ]
 

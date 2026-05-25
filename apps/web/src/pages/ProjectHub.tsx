@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3 } from "lucide-react";
+import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +28,16 @@ import { toast } from "sonner";
 
 export function ProjectHub() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newGenre, setNewGenre] = useState("");
   const queryClient = useQueryClient();
+
+  // Import state
+  const [importPath, setImportPath] = useState("");
+  const [scanResult, setScanResult] = useState<api.ImportScanResult | null>(null);
+  const [isScanning, setIsScanning] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["projects"],
@@ -40,13 +46,18 @@ export function ProjectHub() {
 
   const createMutation = useMutation({
     mutationFn: api.createProject,
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["projects"] });
       setIsCreateOpen(false);
       setNewTitle("");
       setNewDesc("");
       setNewGenre("");
-      toast.success("项目已创建");
+      if (data.warnings && data.warnings.length > 0) {
+        toast.success("项目已创建");
+        data.warnings.forEach((w) => toast.warning(w));
+      } else {
+        toast.success("项目已创建");
+      }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "创建失败"),
   });
@@ -60,9 +71,57 @@ export function ProjectHub() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "删除失败"),
   });
 
+  const importMutation = useMutation({
+    mutationFn: (params: { sourcePath: string; title?: string }) =>
+      api.executeImport(params.sourcePath, params.title),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setIsImportOpen(false);
+      setImportPath("");
+      setScanResult(null);
+      if (data.warnings && data.warnings.length > 0) {
+        toast.success(`已导入：${data.title}`);
+        data.warnings.forEach((w) => toast.warning(w));
+      } else {
+        toast.success(`已导入：${data.title}`);
+      }
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "导入失败"),
+  });
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({ title: newTitle, description: newDesc || undefined, genre: newGenre || undefined });
+  };
+
+  const handleScan = async () => {
+    if (!importPath.trim()) return;
+    setIsScanning(true);
+    setScanResult(null);
+    try {
+      const result = await api.scanImport(importPath.trim());
+      setScanResult(result);
+      if (!result.valid) {
+        toast.error("目录无效：" + result.errors.join("; "));
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "扫描失败");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleImport = () => {
+    if (!scanResult || !scanResult.valid) return;
+    importMutation.mutate({ sourcePath: importPath.trim() });
+  };
+
+  const handleImportOpenChange = (open: boolean) => {
+    setIsImportOpen(open);
+    if (!open) {
+      setImportPath("");
+      setScanResult(null);
+    }
   };
 
   if (isLoading) {
@@ -109,56 +168,136 @@ export function ProjectHub() {
             {projects.length} 个项目
           </p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger
-            render={
-              <Button>
-                <Plus className="size-4 mr-2" />
-                新建项目
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>新建项目</DialogTitle>
-              <DialogDescription>创建一本新书的写作项目</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4 mt-2">
-              <div className="space-y-2">
-                <Label htmlFor="title">书名</Label>
-                <Input
-                  id="title"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="给你的书起个名字"
-                  required
-                />
+        <div className="flex items-center gap-2">
+          {/* Import dialog */}
+          <Dialog open={isImportOpen} onOpenChange={handleImportOpenChange}>
+            <DialogTrigger
+              render={
+                <Button variant="outline">
+                  <FolderOpen className="size-4 mr-2" />
+                  导入项目
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>导入项目</DialogTitle>
+                <DialogDescription>从本地目录导入已有的写作项目</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="import-path">本地路径</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="import-path"
+                      value={importPath}
+                      onChange={(e) => setImportPath(e.target.value)}
+                      placeholder="例：C:\Users\me\my-novel"
+                    />
+                    <Button
+                      variant="secondary"
+                      onClick={handleScan}
+                      disabled={isScanning || !importPath.trim()}
+                    >
+                      {isScanning && <Loader2 className="size-4 mr-1 animate-spin" />}
+                      扫描
+                    </Button>
+                  </div>
+                </div>
+
+                {scanResult && (
+                  <div className="p-3 rounded-md border bg-muted/30 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant={scanResult.valid ? "default" : "destructive"}>
+                        {scanResult.valid ? "有效" : "无效"}
+                      </Badge>
+                      <span className="text-sm font-medium">{scanResult.title}</span>
+                    </div>
+                    {scanResult.valid && (
+                      <>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>路径：{scanResult.source_path}</div>
+                          <div>章节数：{scanResult.chapter_count}</div>
+                          <div>设定文件数：{scanResult.settings_count}</div>
+                          {scanResult.settings_preview.length > 0 && (
+                            <div>设定预览：{scanResult.settings_preview.join("，")}</div>
+                          )}
+                        </div>
+                        <Button
+                          className="w-full"
+                          onClick={handleImport}
+                          disabled={importMutation.isPending}
+                        >
+                          {importMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                          导入项目
+                        </Button>
+                      </>
+                    )}
+                    {!scanResult.valid && scanResult.errors.length > 0 && (
+                      <div className="text-xs text-destructive">
+                        {scanResult.errors.map((e, i) => (
+                          <div key={i}>- {e}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="desc">简介（选填）</Label>
-                <Input
-                  id="desc"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
-                  placeholder="一句话简介"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="genre">题材（选填）</Label>
-                <Input
-                  id="genre"
-                  value={newGenre}
-                  onChange={(e) => setNewGenre(e.target.value)}
-                  placeholder="玄幻 / 都市 / 悬疑..."
-                />
-              </div>
-              <Button type="submit" className="w-full" disabled={createMutation.isPending}>
-                {createMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
-                创建
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+
+          {/* Create dialog */}
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger
+              render={
+                <Button>
+                  <Plus className="size-4 mr-2" />
+                  新建项目
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>新建项目</DialogTitle>
+                <DialogDescription>创建一本新书的写作项目</DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleCreate} className="space-y-4 mt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="title">书名</Label>
+                  <Input
+                    id="title"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="给你的书起个名字"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="desc">简介（选填）</Label>
+                  <Input
+                    id="desc"
+                    value={newDesc}
+                    onChange={(e) => setNewDesc(e.target.value)}
+                    placeholder="一句话简介"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="genre">题材（选填）</Label>
+                  <Input
+                    id="genre"
+                    value={newGenre}
+                    onChange={(e) => setNewGenre(e.target.value)}
+                    placeholder="玄幻 / 都市 / 悬疑..."
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={createMutation.isPending}>
+                  {createMutation.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  创建
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {projects.length === 0 ? (

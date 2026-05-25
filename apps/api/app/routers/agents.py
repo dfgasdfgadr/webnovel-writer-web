@@ -58,6 +58,11 @@ class RunPipelineRequest(BaseModel):
     chapter_outline: str = ""
 
 
+class RunReviewRequest(BaseModel):
+    content: str | None = None
+    outline: str | None = None
+
+
 class PipelineStatusResponse(BaseModel):
     success: bool
     step_results: list[dict]
@@ -472,23 +477,30 @@ async def run_pipeline(
     if not project or project.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    pipeline = await WritingPipeline.create(
-        db=db,
-        project_root=project.root_dir or ".",
-        chapter_id=chapter_id,
-        project_id=project.id,
-        chapter_num=chapter.number,
-        user_id=current_user.id,
-    )
-    effective_outline = (body.chapter_outline or chapter.outline or chapter.content or "").strip()
-    result = await pipeline.run_full(effective_outline)
-    return PipelineStatusResponse(
-        success=result.success,
-        step_results=result.step_results,
-        blocking_issues=result.blocking_issues,
-        chapter_text=result.chapter_text,
-        error=result.error,
-    )
+    try:
+        pipeline = await WritingPipeline.create(
+            db=db,
+            project_root=project.root_dir or ".",
+            chapter_id=chapter_id,
+            project_id=project.id,
+            chapter_num=chapter.number,
+            user_id=current_user.id,
+        )
+        effective_outline = (body.chapter_outline or chapter.outline or chapter.content or "").strip()
+        result = await pipeline.run_full(effective_outline)
+        return PipelineStatusResponse(
+            success=result.success,
+            step_results=result.step_results,
+            blocking_issues=result.blocking_issues,
+            chapter_text=result.chapter_text,
+            error=result.error,
+        )
+    except UnicodeDecodeError as e:
+        logger.exception("Pipeline file encoding error")
+        raise HTTPException(status_code=500, detail=f"项目文件编码错误，请确保为 UTF-8: {e}")
+    except Exception as e:
+        logger.exception("Pipeline failed")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # --- SSE Streaming ---
@@ -601,6 +613,111 @@ async def get_reviews(
     ]
 
 
+@router.post("/reviews/{chapter_id}/run")
+async def run_review(
+    chapter_id: str,
+    body: RunReviewRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Run ReviewAgent on chapter content and persist issues."""
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    chapter_content = (body.content if body and body.content is not None else chapter.content or "").strip()
+    chapter_outline = (body.outline if body and body.outline is not None else chapter.outline or "").strip()
+    if not chapter_content:
+        raise HTTPException(status_code=400, detail="章节无正文，无法审查")
+
+    try:
+        pipeline = await WritingPipeline.create(
+            db=db,
+            project_root=project.root_dir or ".",
+            chapter_id=chapter_id,
+            project_id=project.id,
+            chapter_num=chapter.number,
+            user_id=current_user.id,
+        )
+        pipeline.ensure_llm_configured()
+        contracts = pipeline.story.get_all_contracts_for_writing(chapter.number)
+        setting_json = contracts.get("master_setting", {})
+
+        review_result = await pipeline._run_agent("review", pipeline.review_agent.run(
+            chapter_content=chapter_content,
+            setting_json=setting_json,
+            chapter_outline=chapter_outline,
+        ))
+        if not review_result.success:
+            raise HTTPException(status_code=502, detail=review_result.error or "审查失败")
+
+        issues = review_result.data.get("issues", [])
+
+        # Replace previous review issues for this chapter
+        old = await db.execute(select(ReviewIssue).where(ReviewIssue.chapter_id == chapter_id))
+        for item in old.scalars().all():
+            await db.delete(item)
+
+        for issue in issues:
+            db.add(ReviewIssue(
+                chapter_id=chapter_id,
+                project_id=project.id,
+                severity=issue.get("severity", "minor"),
+                category=issue.get("category", "unknown"),
+                title=issue.get("title", ""),
+                description=issue.get("description", ""),
+                evidence=issue.get("evidence", ""),
+                suggestion=issue.get("suggestion"),
+            ))
+
+        metrics = review_result.data.get("review_metrics", {})
+        if metrics:
+            db.add(ReviewMetric(
+                chapter_id=chapter_id,
+                project_id=project.id,
+                consistency_score=int(metrics.get("consistency_score", 0)),
+                timeline_score=int(metrics.get("timeline_score", 0)),
+                coherence_score=int(metrics.get("coherence_score", 0)),
+                ooc_score=int(metrics.get("ooc_score", 0)),
+                logic_score=int(metrics.get("logic_score", 0)),
+                foreshadowing_score=int(metrics.get("foreshadowing_score", 0)),
+                ai_flavor_score=int(metrics.get("ai_flavor_score", 0)),
+                summary=review_result.data.get("summary", ""),
+            ))
+
+        pipeline.story.write_review(chapter.number, {"issues": issues})
+        if any(i.get("severity") == "blocking" for i in issues):
+            chapter.status = "reviewing"
+        await db.commit()
+
+        result = await db.execute(
+            select(ReviewIssue).where(ReviewIssue.chapter_id == chapter_id).order_by(ReviewIssue.created_at.desc())
+        )
+        saved = result.scalars().all()
+        return [
+            {
+                "id": i.id, "severity": i.severity, "category": i.category,
+                "title": i.title, "description": i.description,
+                "evidence": i.evidence, "suggestion": i.suggestion,
+                "is_fixed": i.is_fixed, "created_at": i.created_at.isoformat() if i.created_at else None,
+            }
+            for i in saved
+        ]
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except UnicodeDecodeError as e:
+        logger.exception("Review file encoding error")
+        raise HTTPException(status_code=500, detail=f"项目文件编码错误，请确保为 UTF-8: {e}")
+    except Exception as e:
+        logger.exception("Review failed")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/reviews/{chapter_id}/metrics")
 async def get_review_metrics(
     chapter_id: str,
@@ -680,21 +797,22 @@ async def run_continuity(
         )
         foreshadowings = result.scalars().all()
         body.foreshadowing = [
-            {"id": f.id, "title": f.title, "status": f.status, "chapter_planted": f.chapter_planted}
+            {"id": f.id, "description": f.description, "status": f.status, "planted_in_chapter_id": f.planted_in_chapter_id}
             for f in foreshadowings
         ]
 
     if not body.recent_commits:
         result = await db.execute(
-            select(ChapterCommit)
+            select(ChapterCommit, ChapterModel.number)
+            .join(ChapterModel, ChapterModel.id == ChapterCommit.chapter_id)
             .where(ChapterCommit.project_id == project_id)
             .order_by(ChapterCommit.created_at.desc())
             .limit(5)
         )
-        commits = result.scalars().all()
+        rows = result.all()
         body.recent_commits = [
-            {"chapter_number": c.chapter_number, "summary": c.summary or ""}
-            for c in commits
+            {"chapter_number": num, "chapter_id": c.chapter_id, "summary": c.summary or ""}
+            for c, num in rows
         ]
 
     agent = ContinuityAgent()
@@ -753,8 +871,8 @@ async def get_graph_data(
     foreshadowings = foreshadowing_result.scalars().all()
     timeline = [
         {
-            "id": f.id, "title": f.title, "status": f.status,
-            "chapter_planted": f.chapter_planted, "chapter_resolved": f.chapter_resolved,
+            "id": f.id, "status": f.status,
+            "planted_in_chapter_id": f.planted_in_chapter_id, "resolved_in_chapter_id": f.resolved_in_chapter_id,
             "description": f.description,
         }
         for f in foreshadowings
@@ -815,6 +933,11 @@ async def polish_chapter(
     return {"result": result.data.get("result", {}), "token_input": result.token_input, "token_output": result.token_output}
 
 
+def _sse_event(event: str, data: dict) -> str:
+    """Format a Server-Sent Event with an event type and JSON data."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
 @router.get("/polish/{chapter_id}/stream")
 async def stream_polish(
     chapter_id: str,
@@ -861,7 +984,7 @@ async def stream_polish(
         llm = await LLMProvider.for_user(current_user.id, db)
         agent = PolishAgent(llm=llm)
 
-        yield f"data: {json.dumps({'type': 'start', 'total_issues': len(issues_data)}, ensure_ascii=False)}\n\n"
+        yield _sse_event("start", {"type": "start", "total_issues": len(issues_data)})
 
         for idx, issue in enumerate(issues_data):
             try:
@@ -872,7 +995,7 @@ async def stream_polish(
                 )
                 if polish_result.success:
                     diff_data = polish_result.data.get("result", {})
-                    yield f"data: {json.dumps({'type': 'issue_done', 'index': idx + 1, 'issue_id': issue['id'], 'issue_title': issue['title'], 'diff': diff_data.get('diff', []), 'summary': diff_data.get('summary', '')}, ensure_ascii=False)}\n\n"
+                    yield _sse_event("issue_done", {"type": "issue_done", "index": idx + 1, "issue_id": issue["id"], "issue_title": issue["title"], "diff": diff_data.get("diff", []), "summary": diff_data.get("summary", "")})
 
                     # Update content incrementally
                     for d in diff_data.get("diff", []):
@@ -884,11 +1007,11 @@ async def stream_polish(
                         db_issue.is_fixed = True
                     await db.commit()
                 else:
-                    yield f"data: {json.dumps({'type': 'issue_error', 'index': idx + 1, 'issue_id': issue['id'], 'error': polish_result.error}, ensure_ascii=False)}\n\n"
+                    yield _sse_event("issue_error", {"type": "issue_error", "index": idx + 1, "issue_id": issue["id"], "error": polish_result.error})
             except Exception as e:
-                yield f"data: {json.dumps({'type': 'issue_error', 'index': idx + 1, 'issue_id': issue['id'], 'error': str(e)}, ensure_ascii=False)}\n\n"
+                yield _sse_event("issue_error", {"type": "issue_error", "index": idx + 1, "issue_id": issue["id"], "error": str(e)})
 
-        yield f"data: {json.dumps({'type': 'done', 'updated_content': chapter.content}, ensure_ascii=False)}\n\n"
+        yield _sse_event("done", {"type": "done", "updated_content": chapter.content})
 
     return StreamingResponse(
         generate(),

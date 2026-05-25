@@ -92,6 +92,7 @@ export function ReviewPage() {
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishProgress, setPolishProgress] = useState<{ index: number; total: number; issueTitle: string } | null>(null);
   const [polishDiffs, setPolishDiffs] = useState<Array<{ issueId: string; issueTitle: string; summary: string; diffs: Array<{ before: string; after: string; axis: string }> }>>([]);
+  const [polishError, setPolishError] = useState<string | null>(null);
 
   const handleFixAll = useCallback(() => {
     if (!chapterId) return;
@@ -100,8 +101,7 @@ export function ReviewPage() {
     setPolishProgress(null);
 
     const url = api.streamPolishUrl(chapterId);
-    const token = localStorage.getItem("token");
-    const eventSource = new EventSource(`${url}&token=${token || ""}`);
+    const eventSource = new EventSource(url);
 
     eventSource.addEventListener("start", (e: MessageEvent) => {
       const data = JSON.parse(e.data);
@@ -138,6 +138,7 @@ export function ReviewPage() {
 
     eventSource.onerror = () => {
       setIsPolishing(false);
+      setPolishError("SSE 连接中断，请检查 API 服务是否运行");
       eventSource.close();
     };
   }, [chapterId, projectId, queryClient]);
@@ -234,6 +235,9 @@ export function ReviewPage() {
                   </>
                 )}
               </Button>
+            )}
+            {polishError && (
+              <span className="text-xs text-red-400 ml-2">{polishError}</span>
             )}
           </div>
 

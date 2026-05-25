@@ -19,6 +19,21 @@ import urllib.error
 DEFAULT_API_URL = "http://localhost:8000/api/v1"
 
 
+def _safe_print(*args, **kwargs):
+    """Print with encoding safety for Windows GBK consoles."""
+    try:
+        print(*args, **kwargs)
+    except UnicodeEncodeError:
+        # Fallback: encode to ASCII with replace for broken consoles
+        safe_args = []
+        for a in args:
+            if isinstance(a, str):
+                safe_args.append(a.encode("ascii", errors="replace").decode("ascii"))
+            else:
+                safe_args.append(a)
+        print(*safe_args, **kwargs)
+
+
 def get_token() -> str:
     """Get JWT token from env or cache file."""
     token = os.environ.get("NOVELCRAFT_TOKEN", "")
@@ -32,7 +47,7 @@ def get_token() -> str:
             if token:
                 return token
 
-    print("No auth token found. Set NOVELCRAFT_TOKEN env var or login first.", file=sys.stderr)
+    _safe_print("No auth token found. Set NOVELCRAFT_TOKEN env var or login first.", file=sys.stderr)
     sys.exit(1)
 
 
@@ -56,9 +71,9 @@ def api_request(method: str, path: str, data: dict | None = None, token: str | N
         error_body = e.read().decode("utf-8") if e.fp else str(e)
         try:
             error_data = json.loads(error_body)
-            print(f"API Error ({e.code}): {error_data.get('detail', error_body)}", file=sys.stderr)
+            _safe_print(f"API Error ({e.code}): {error_data.get('detail', error_body)}", file=sys.stderr)
         except json.JSONDecodeError:
-            print(f"API Error ({e.code}): {error_body}", file=sys.stderr)
+            _safe_print(f"API Error ({e.code}): {error_body}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -86,12 +101,12 @@ def cmd_login(args):
                 os.makedirs(cache_dir, exist_ok=True)
                 with open(os.path.join(cache_dir, "token"), "w") as f:
                     f.write(token)
-                print(f"Logged in successfully. Token cached.")
+                _safe_print(f"Logged in successfully. Token cached.")
             else:
-                print("Login failed: no token in response", file=sys.stderr)
+                _safe_print("Login failed: no token in response", file=sys.stderr)
                 sys.exit(1)
     except urllib.error.HTTPError as e:
-        print(f"Login failed ({e.code})", file=sys.stderr)
+        _safe_print(f"Login failed ({e.code})", file=sys.stderr)
         sys.exit(1)
 
 
@@ -108,28 +123,28 @@ def cmd_write(args):
     }, token=token)
 
     if result.get("success"):
-        print(f"Chapter {args.chapter} written successfully.")
+        _safe_print(f"Chapter {args.chapter} written successfully.")
         if result.get("blocking_issues"):
-            print(f"Blocking issues: {len(result['blocking_issues'])}")
+            _safe_print(f"Blocking issues: {len(result['blocking_issues'])}")
     else:
-        print(f"Pipeline failed: {result.get('error', 'Unknown error')}", file=sys.stderr)
+        _safe_print(f"Pipeline failed: {result.get('error', 'Unknown error')}", file=sys.stderr)
         sys.exit(1)
 
 
 def cmd_review(args):
     """Get review results for a chapter."""
     issues = api_request("GET", f"/agents/reviews/{args.chapter}")
-    print(f"Review issues: {len(issues)}")
+    _safe_print(f"Review issues: {len(issues)}")
     for issue in issues:
-        severity_icon = "🔴" if issue["severity"] == "blocking" else "🟡" if issue["severity"] == "major" else "⚪"
-        print(f"  {severity_icon} [{issue['severity']}] {issue['title']}")
+        severity_icon = "[X]" if issue["severity"] == "blocking" else "[!]" if issue["severity"] == "major" else "[-]"
+        _safe_print(f"  {severity_icon} [{issue['severity']}] {issue['title']}")
         if issue.get("suggestion"):
-            print(f"     → {issue['suggestion']}")
+            _safe_print(f"     -> {issue['suggestion']}")
 
     # Also show metrics
     metrics = api_request("GET", f"/agents/reviews/{args.chapter}/metrics")
     if metrics:
-        print("\n7-Dimension Scores:")
+        _safe_print("\n7-Dimension Scores:")
         latest = metrics[0]
         dims = [
             ("设定一致性", latest.get("consistency_score", 0)),
@@ -141,8 +156,8 @@ def cmd_review(args):
             ("AI味", latest.get("ai_flavor_score", 0)),
         ]
         for name, score in dims:
-            bar = "█" * int(score / 5) + "░" * (20 - int(score / 5))
-            print(f"  {name:8s} [{bar}] {score}/100")
+            bar = "#" * int(score / 5) + "." * (20 - int(score / 5))
+            _safe_print(f"  {name:8s} [{bar}] {score}/100")
 
 
 def cmd_synopsis(args):
@@ -154,35 +169,35 @@ def cmd_synopsis(args):
         "world_building": {},
         "power_system": "",
     })
-    print(f"Synopsis generated: {result.get('title', 'Untitled')}")
-    print(f"Synopsis: {result.get('synopsis', '')[:500]}...")
+    _safe_print(f"Synopsis generated: {result.get('title', 'Untitled')}")
+    _safe_print(f"Synopsis: {result.get('synopsis', '')[:500]}...")
 
 
 def cmd_import(args):
     """Import a project from a local directory."""
-    print(f"Scanning: {args.source}")
+    _safe_print(f"Scanning: {args.source}")
     scan = api_request("POST", "/projects/import/scan", data={"source_path": args.source})
 
     if not scan.get("valid"):
-        print(f"Invalid directory: {scan.get('errors', [])}", file=sys.stderr)
+        _safe_print(f"Invalid directory: {scan.get('errors', [])}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Found: {scan['chapter_count']} chapters, {scan['settings_count']} settings files")
-    print("Importing...")
+    _safe_print(f"Found: {scan['chapter_count']} chapters, {scan['settings_count']} settings files")
+    _safe_print("Importing...")
     result = api_request("POST", "/projects/import", data={
         "source_path": args.source,
         "title": args.title,
     })
-    print(f"Imported: {result['title']} (ID: {result['id']})")
+    _safe_print(f"Imported: {result['title']} (ID: {result['id']})")
 
 
 def cmd_list(args):
     """List projects."""
     result = api_request("GET", "/projects")
-    print(f"Projects ({result.get('total', 0)}):")
+    _safe_print(f"Projects ({result.get('total', 0)}):")
     for p in result.get("items", []):
-        status_icon = "📗" if p.get("status") == "active" else "📕"
-        print(f"  {status_icon} {p['id'][:8]}.. {p['title']} ({p.get('genre', 'N/A')})")
+        status_icon = "[*]" if p.get("status") == "active" else "[ ]"
+        _safe_print(f"  {status_icon} {p['id'][:8]}.. {p['title']} ({p.get('genre', 'N/A')})")
 
 
 def main():

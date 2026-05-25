@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o"
     novelcraft_data_root: str = "./data/projects"
+    plugins_dir: str = ""  # empty = auto-compute from repo root
 
     model_config = SettingsConfigDict(
         env_file=(".env", "../../.env"),

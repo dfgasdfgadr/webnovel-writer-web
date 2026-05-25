@@ -123,6 +123,16 @@ export function ChapterEditor() {
     onError: (err) => toast.error(err instanceof Error ? err.message : "流水线执行失败"),
   });
 
+  const reviewMutation = useMutation({
+    mutationFn: () => api.runReview(chapterId!, { content, outline }),
+    onSuccess: (issues) => {
+      queryClient.setQueryData(["reviews", chapterId], issues);
+      setShowReview(true);
+      toast.success(`审查完成，发现 ${issues.length} 个问题`);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "审查失败"),
+  });
+
   const createChapterMutation = useMutation({
     mutationFn: (title: string) =>
       api.createChapter(projectId!, {
@@ -528,11 +538,24 @@ export function ChapterEditor() {
 
               <Button
                 variant="ghost" size="sm"
-                onClick={() => setShowReview(!showReview)}
+                onClick={() => {
+                  if (!content.trim()) {
+                    toast.error("请先填写正文后再审查");
+                    return;
+                  }
+                  reviewMutation.mutate();
+                }}
+                disabled={reviewMutation.isPending}
                 className="text-xs"
               >
-                {showReview ? <PanelRightClose className="size-4" /> : <PanelRightOpen className="size-4" />}
-                {showReview ? "隐藏审查" : "审查"}
+                {reviewMutation.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : showReview ? (
+                  <PanelRightClose className="size-4" />
+                ) : (
+                  <PanelRightOpen className="size-4" />
+                )}
+                {reviewMutation.isPending ? "审查中..." : showReview ? "重新审查" : "审查"}
               </Button>
 
               <Link to={`/projects/${projectId}/reviews/${chapterId}`}>

@@ -19,7 +19,7 @@ async def list_plugins(
     current_user: User = Depends(get_current_user),
 ):
     """List all discovered plugins and their status."""
-    loader = get_plugin_loader("plugins")
+    loader = get_plugin_loader()
     return {"plugins": loader.list_plugins(), "total": len(loader.plugins)}
 
 
@@ -29,7 +29,7 @@ async def load_plugin(
     current_user: User = Depends(get_current_user),
 ):
     """Load a specific plugin by name."""
-    loader = get_plugin_loader("plugins")
+    loader = get_plugin_loader()
     if plugin_name not in loader.plugins:
         raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
 
@@ -51,7 +51,7 @@ async def toggle_plugin(
     current_user: User = Depends(get_current_user),
 ):
     """Enable or disable a plugin."""
-    loader = get_plugin_loader("plugins")
+    loader = get_plugin_loader()
     if plugin_name not in loader.plugins:
         raise HTTPException(status_code=404, detail=f"Plugin not found: {plugin_name}")
 
@@ -64,7 +64,7 @@ async def reload_plugins(
     current_user: User = Depends(get_current_user),
 ):
     """Re-scan the plugins directory."""
-    loader = get_plugin_loader("plugins")
+    loader = get_plugin_loader()
     loader.plugins.clear()
     discovered = loader.scan()
     return {"discovered": len(discovered), "plugins": loader.list_plugins()}

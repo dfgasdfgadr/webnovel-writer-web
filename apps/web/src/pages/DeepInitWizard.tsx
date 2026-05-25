@@ -93,7 +93,14 @@ export function DeepInitWizard() {
       return project;
     },
     onSuccess: (project) => {
-      toast.success("项目创建成功，AI 正在生成设定集与总纲...");
+      if (project.warnings && project.warnings.length > 0) {
+        toast.warning("AI 生成失败，已使用项目预设信息创建基础设定文件。请检查 LLM 配置。", {
+          description: project.warnings[0],
+          duration: 8000,
+        });
+      } else {
+        toast.success("项目创建成功，AI 正在生成设定集与总纲...");
+      }
       navigate(`/projects/${project.id}/planning`);
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "创建失败"),
