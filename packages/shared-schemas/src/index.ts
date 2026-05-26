@@ -306,6 +306,62 @@ export interface DisambiguationListResponse {
   total: number;
 }
 
+// ─── Card ───
+export interface CardPublic {
+  id: string;
+  card_type: string;
+  label: string;
+  content: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface CardCreate {
+  card_type: string;
+  label: string;
+  content?: Record<string, unknown>;
+}
+
+// ─── Entity ───
+export interface EntityPublic {
+  id: string;
+  entity_type: string;
+  label: string;
+  aliases: string[];
+  attributes: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface EntityCreate {
+  entity_type: string;
+  label: string;
+  aliases?: string[];
+  attributes?: Record<string, unknown>;
+}
+
+export interface EntityUpdate {
+  label?: string;
+  aliases?: string[];
+  attributes?: Record<string, unknown>;
+}
+
+// ─── Relationship ───
+export interface RelationshipPublic {
+  id: string;
+  source_entity_id: string;
+  target_entity_id: string;
+  relation_type: string;
+  description: string | null;
+  attributes: Record<string, unknown>;
+}
+
+export interface RelationshipCreate {
+  source_entity_id: string;
+  target_entity_id: string;
+  relation_type: string;
+  description?: string;
+  attributes?: Record<string, unknown>;
+}
+
 // ─── Summary ───
 export type SummaryLevel = "volume" | "arc" | "chapter";
 

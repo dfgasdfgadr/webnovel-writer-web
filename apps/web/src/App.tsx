@@ -17,6 +17,10 @@ import { ReviewPage } from "@/pages/ReviewPage";
 import { PlanningCenter } from "@/pages/PlanningCenter";
 import { DeepInitWizard } from "@/pages/DeepInitWizard";
 import { DisambiguationQueue } from "@/pages/DisambiguationQueue";
+import { CardsPage } from "@/pages/CardsPage";
+import { SummariesPage } from "@/pages/SummariesPage";
+import { PluginManager } from "@/pages/PluginManager";
+import { WorkflowView } from "@/pages/WorkflowView";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -69,8 +73,12 @@ export default function App() {
                 <Route path="/" element={<ProjectHub />} />
                 <Route path="/projects/new/wizard" element={<DeepInitWizard />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/settings/plugins" element={<PluginManager />} />
+                <Route path="/settings/workflows" element={<WorkflowView />} />
                 <Route path="/projects/:projectId" element={<ProjectDetail />} />
                 <Route path="/projects/:projectId/planning" element={<PlanningCenter />} />
+                <Route path="/projects/:projectId/cards" element={<CardsPage />} />
+                <Route path="/projects/:projectId/summaries" element={<SummariesPage />} />
                 <Route path="/projects/:projectId/graph" element={<GraphView />} />
                 <Route path="/projects/:projectId/simulations" element={<SimulationCenter />} />
                 <Route path="/projects/:projectId/disambiguation" element={<DisambiguationQueue />} />

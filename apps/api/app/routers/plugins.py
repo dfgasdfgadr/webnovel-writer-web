@@ -68,3 +68,27 @@ async def reload_plugins(
     loader.plugins.clear()
     discovered = loader.scan()
     return {"discovered": len(discovered), "plugins": loader.list_plugins()}
+
+
+@router.get("/workflows")
+async def list_workflows(
+    current_user: User = Depends(get_current_user),
+):
+    """List built-in and plugin workflow rules."""
+    from app.workflows.engine import WorkflowEngine, BUILTIN_RULES
+
+    engine = WorkflowEngine()
+    rules = []
+    for rule in engine.rules:
+        rules.append({
+            "name": rule.name,
+            "trigger": rule.trigger.value if hasattr(rule.trigger, "value") else str(rule.trigger),
+            "enabled": rule.enabled,
+            "actions": [
+                {"name": a.name, "type": a.type, "config": a.config}
+                for a in rule.actions
+            ],
+            "condition": rule.condition,
+        })
+
+    return {"rules": rules, "total": len(rules), "builtin_count": len(BUILTIN_RULES)}

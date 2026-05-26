@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, Play, Loader2, CheckCircle, XCircle,
-  AlertTriangle, RefreshCw, FlaskConical, GitBranch,
+  AlertTriangle, FlaskConical, GitBranch,
   Clock, ChevronRight, ClipboardCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,35 +19,6 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ProjectNav } from "@/components/layout/ProjectNav";
 import { toast } from "sonner";
 import * as api from "@/lib/api";
-
-interface SimJob {
-  id: string;
-  project_id: string;
-  mode: string;
-  status: string;
-  progress: number;
-  mirofish_available: boolean;
-  report: Record<string, unknown> | null;
-  steps: Array<{ step: string; status: string; description: string }> | null;
-  error_message: string | null;
-  created_at: string;
-}
-
-function requestSimulations<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = localStorage.getItem("token");
-  return fetch(`/api/v1/simulations${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers || {}),
-    },
-  }).then(async (res) => {
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || "Request failed");
-    return data as T;
-  });
-}
 
 export function SimulationCenter() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -65,25 +36,22 @@ export function SimulationCenter() {
 
   const { data: simJobs, isLoading } = useQuery({
     queryKey: ["simulations", projectId],
-    queryFn: () => requestSimulations<SimJob[]>(`?project_id=${projectId}`),
+    queryFn: () => api.listSimulations(projectId!),
     enabled: !!projectId,
   });
 
   const { data: simDetail } = useQuery({
     queryKey: ["simulation", selectedSim],
-    queryFn: () => requestSimulations<SimJob>(`/${selectedSim}`),
+    queryFn: () => api.getSimulation(selectedSim!),
     enabled: !!selectedSim,
   });
 
   const createSim = useMutation({
     mutationFn: () =>
-      requestSimulations<SimJob>("", {
-        method: "POST",
-        body: JSON.stringify({
-          project_id: projectId,
-          mode,
-          sim_brief: simBrief,
-        }),
+      api.createSimulation({
+        project_id: projectId!,
+        mode,
+        sim_brief: simBrief,
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["simulations", projectId] });
@@ -96,6 +64,14 @@ export function SimulationCenter() {
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "创建失败"),
+  });
+
+  const adoptMut = useMutation({
+    mutationFn: () => api.adoptSimulation(selectedSim!),
+    onSuccess: (data) => {
+      if (data.success) toast.success("已采纳修订章纲");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "采纳失败"),
   });
 
   const modeLabel = (m: string) => (m === "pre_chapter" ? "写前推演" : "分支探索");
@@ -263,14 +239,8 @@ export function SimulationCenter() {
                               size="sm"
                               variant="outline"
                               className="text-xs text-amber-400"
-                              onClick={async () => {
-                                try {
-                                  const res = await requestSimulations<{ success: boolean }>(`/${selectedSim}/adopt`, { method: "POST" });
-                                  if (res.success) toast.success("已采纳修订章纲");
-                                } catch (err) {
-                                  toast.error(err instanceof Error ? err.message : "采纳失败");
-                                }
-                              }}
+                              onClick={() => adoptMut.mutate()}
+                              disabled={adoptMut.isPending}
                             >
                               <ClipboardCheck className="size-3 mr-1" />
                               采纳修订章纲

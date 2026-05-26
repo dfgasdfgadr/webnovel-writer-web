@@ -24,14 +24,18 @@ def _safe_print(*args, **kwargs):
     try:
         print(*args, **kwargs)
     except UnicodeEncodeError:
-        # Fallback: encode to ASCII with replace for broken consoles
         safe_args = []
         for a in args:
             if isinstance(a, str):
-                safe_args.append(a.encode("ascii", errors="replace").decode("ascii"))
+                safe_args.append(a.encode(sys.stdout.encoding or "utf-8", errors="replace").decode(sys.stdout.encoding or "utf-8", errors="replace"))
             else:
                 safe_args.append(a)
-        print(*safe_args, **kwargs)
+        try:
+            print(*safe_args, **kwargs)
+        except Exception:
+            # Last resort: pure ASCII
+            ascii_args = [str(a).encode("ascii", errors="replace").decode("ascii") for a in args]
+            print(*ascii_args, **kwargs)
 
 
 def get_token() -> str:

@@ -127,6 +127,8 @@ _loader: PluginLoader | None = None
 def get_plugin_loader(plugins_dir: str = "") -> PluginLoader:
     global _loader
     if _loader is None:
-        _loader = PluginLoader(plugins_dir)
+        from app.config import settings
+        effective_dir = plugins_dir or settings.plugins_dir or ""
+        _loader = PluginLoader(effective_dir)
         _loader.scan()
     return _loader

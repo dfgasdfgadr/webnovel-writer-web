@@ -99,42 +99,52 @@ export function ReviewPage() {
     setIsPolishing(true);
     setPolishDiffs([]);
     setPolishProgress(null);
+    setPolishError(null);
 
     const url = api.streamPolishUrl(chapterId);
     const eventSource = new EventSource(url);
 
-    eventSource.addEventListener("start", (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      setPolishProgress({ index: 0, total: data.total_issues, issueTitle: "" });
-    });
-
-    eventSource.addEventListener("issue_done", (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      setPolishProgress({ index: data.index, total: data.index, issueTitle: data.issue_title });
-      setPolishDiffs((prev) => [...prev, {
-        issueId: data.issue_id,
-        issueTitle: data.issue_title,
-        summary: data.summary,
-        diffs: data.diff || [],
-      }]);
-    });
-
-    eventSource.addEventListener("issue_error", (e: MessageEvent) => {
-      const data = JSON.parse(e.data);
-      setPolishDiffs((prev) => [...prev, {
-        issueId: data.issue_id,
-        issueTitle: `错误: ${data.error}`,
-        summary: "",
-        diffs: [],
-      }]);
-    });
-
-    eventSource.addEventListener("done", () => {
-      setIsPolishing(false);
-      eventSource.close();
-      queryClient.invalidateQueries({ queryKey: ["reviews", chapterId] });
-      queryClient.invalidateQueries({ queryKey: ["chapter", projectId, chapterId] });
-    });
+    eventSource.onmessage = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (!data.type) return;
+        switch (data.type) {
+          case "start":
+            setPolishProgress({ index: 0, total: data.total_issues, issueTitle: "" });
+            break;
+          case "issue_done":
+            setPolishProgress({ index: data.index, total: data.index, issueTitle: data.issue_title });
+            setPolishDiffs((prev) => [...prev, {
+              issueId: data.issue_id,
+              issueTitle: data.issue_title,
+              summary: data.summary,
+              diffs: data.diff || [],
+            }]);
+            break;
+          case "issue_error":
+            setPolishDiffs((prev) => [...prev, {
+              issueId: data.issue_id || "",
+              issueTitle: `错误: ${data.error}`,
+              summary: "",
+              diffs: [],
+            }]);
+            break;
+          case "done":
+            setIsPolishing(false);
+            eventSource.close();
+            queryClient.invalidateQueries({ queryKey: ["reviews", chapterId] });
+            queryClient.invalidateQueries({ queryKey: ["chapter", projectId, chapterId] });
+            break;
+          case "error":
+            setIsPolishing(false);
+            setPolishError(data.error || "修复失败");
+            eventSource.close();
+            break;
+        }
+      } catch {
+        // ignore unparseable messages
+      }
+    };
 
     eventSource.onerror = () => {
       setIsPolishing(false);

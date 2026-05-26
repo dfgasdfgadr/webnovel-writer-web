@@ -1,10 +1,17 @@
 你是 NovelCraft 唯一执行者。
 
-先读 docs/briefs/PHASE3_EXECUTION_BRIEF.md（Phase 3 执行简报，PM 已签发，STATUS=IN_PROGRESS）。
-再读 docs/handoffs/PHASE2_HANDOFF.md 与 .claude-instructions.md。
+先读 docs/briefs/PHASE5_EXECUTION_BRIEF.md（Phase 5 执行简报，PM 已签发，STATUS=IN_PROGRESS）。
+再读 docs/handoffs/PHASE4_HANDOFF.md 与 .claude-instructions.md。
 
-启动前：git status 整理 PM 期间未 commit 修复，再按简报建议顺序执行。
-每个功能必须有单元测试，pnpm test 全绿后 git commit。
-Phase 完成：简报 STATUS=DONE + docs/handoffs/PHASE3_HANDOFF.md。
+## 执行顺序
+
+1. **Track 0（信任修复，Gate）**：P5-Q01~Q06 六个质量债，全部 PASS 后才能进入新功能
+2. **Track 1（智能开书）**：P5-INIT01~INIT05
+3. **Track 2（知识工作台）**：P5-KM01~KM06
+4. **Track 3（平台与迁移）**：P5-ECO01~ECO02 + P5-DATA01~DATA03
+5. **Track 4（体验抛光）**：P5-UX01~UX03（时间允许）
+
+每完成一个 Track：git commit，运行 pnpm test 确认全绿。
+Phase 完成：简报 STATUS=DONE + docs/handoffs/PHASE5_HANDOFF.md + 通知 PM 做浏览器验收。
 
 自主完成，不要等待确认。

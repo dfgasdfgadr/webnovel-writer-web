@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen } from "lucide-react";
+import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen, Sparkles, FileArchive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +38,14 @@ export function ProjectHub() {
   const [importPath, setImportPath] = useState("");
   const [scanResult, setScanResult] = useState<api.ImportScanResult | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+
+  // Edit state
+  const [isZipOpen, setIsZipOpen] = useState(false);
+  const [zipFile, setZipFile] = useState<File | null>(null);
+
+  const [editProject, setEditProject] = useState<api.ProjectPublic | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["projects"],
@@ -87,6 +95,38 @@ export function ProjectHub() {
       }
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "导入失败"),
+  });
+
+  const zipImportMut = useMutation({
+    mutationFn: (file: File) => api.importZip(file),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setIsZipOpen(false);
+      setZipFile(null);
+      toast.success(`已导入：${data.title}`);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "导入失败"),
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
+      api.updateProject(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      setEditProject(null);
+      toast.success("项目已更新");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "更新失败"),
+  });
+
+  const archiveMut = useMutation({
+    mutationFn: ({ id, archive }: { id: string; archive: boolean }) =>
+      api.updateProject(id, { status: archive ? "archived" : "active" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      toast.success("项目状态已更新");
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "操作失败"),
   });
 
   const handleCreate = (e: React.FormEvent) => {
@@ -169,6 +209,53 @@ export function ProjectHub() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Link to="/projects/new/wizard">
+            <Button variant="outline" className="gap-1.5">
+              <Sparkles className="size-4" />
+              深度初始化
+            </Button>
+          </Link>
+
+          {/* Zip import dialog */}
+          <Dialog open={isZipOpen} onOpenChange={(open) => { setIsZipOpen(open); if (!open) setZipFile(null); }}>
+            <DialogTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  <FileArchive className="size-4 mr-1.5" />
+                  导入 zip
+                </Button>
+              }
+            />
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>从 zip 导入项目</DialogTitle>
+                <DialogDescription>
+                  上传包含 正文/ 设定集/ 大纲/ 目录的 zip 文件
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <Input
+                  type="file"
+                  accept=".zip"
+                  onChange={(e) => setZipFile(e.target.files?.[0] ?? null)}
+                />
+                {zipFile && (
+                  <p className="text-xs text-muted-foreground">
+                    已选择：{zipFile.name} ({(zipFile.size / 1024).toFixed(1)} KB)
+                  </p>
+                )}
+                <Button
+                  className="w-full"
+                  onClick={() => zipFile && zipImportMut.mutate(zipFile)}
+                  disabled={!zipFile || zipImportMut.isPending}
+                >
+                  {zipImportMut.isPending && <Loader2 className="size-4 mr-2 animate-spin" />}
+                  上传并导入
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
           {/* Import dialog */}
           <Dialog open={isImportOpen} onOpenChange={handleImportOpenChange}>
             <DialogTrigger
@@ -242,6 +329,48 @@ export function ProjectHub() {
                     )}
                   </div>
                 )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit dialog */}
+          <Dialog open={!!editProject} onOpenChange={(open) => { if (!open) { setEditProject(null); setEditTitle(""); setEditDesc(""); } }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>编辑项目</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-title">书名</Label>
+                  <Input
+                    id="edit-title"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-desc">简介</Label>
+                  <Input
+                    id="edit-desc"
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  onClick={() => {
+                    if (editProject) {
+                      updateMut.mutate({
+                        id: editProject.id,
+                        data: { title: editTitle, description: editDesc },
+                      });
+                    }
+                  }}
+                  disabled={updateMut.isPending || !editTitle.trim()}
+                >
+                  {updateMut.isPending ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
+                  保存
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
@@ -339,6 +468,23 @@ export function ProjectHub() {
                       }
                     />
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => {
+                        setEditProject(project);
+                        setEditTitle(project.title);
+                        setEditDesc(project.description || "");
+                      }}>
+                        <Edit3 className="size-4 mr-2" />
+                        编辑
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() =>
+                        archiveMut.mutate({
+                          id: project.id,
+                          archive: project.status !== "archived",
+                        })
+                      }>
+                        <Archive className="size-4 mr-2" />
+                        {project.status === "archived" ? "取消归档" : "归档"}
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => deleteMutation.mutate(project.id)}>
                         <Trash2 className="size-4 mr-2 text-destructive" />
                         删除

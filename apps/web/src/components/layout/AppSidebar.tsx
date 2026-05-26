@@ -1,4 +1,4 @@
-import { BookOpen, Home, LogOut, Settings, type LucideIcon } from "lucide-react";
+import { BookOpen, Home, LogOut, Settings, Puzzle, GitBranch, type LucideIcon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -50,7 +50,7 @@ export function AppSidebar() {
               {mainNav.map((item) => (
                 <SidebarMenuItem key={item.url}>
                   <SidebarMenuButton
-                    isActive={location.pathname === item.url}
+                    isActive={location.pathname === item.url || (item.url === "/settings" && location.pathname.startsWith("/settings"))}
                     render={
                       <Link to={item.url}>
                         <item.icon className="size-4" />
@@ -60,6 +60,32 @@ export function AppSidebar() {
                   />
                 </SidebarMenuItem>
               ))}
+              {location.pathname.startsWith("/settings") && (
+                <>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={location.pathname === "/settings/plugins"}
+                      render={
+                        <Link to="/settings/plugins">
+                          <Puzzle className="size-4 ml-6" />
+                          <span>插件管理</span>
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      isActive={location.pathname === "/settings/workflows"}
+                      render={
+                        <Link to="/settings/workflows">
+                          <GitBranch className="size-4 ml-6" />
+                          <span>工作流规则</span>
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                </>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

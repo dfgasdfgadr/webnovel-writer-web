@@ -1,8 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
-import { FileText, FlaskConical, Network, Map, Filter } from "lucide-react";
+import { FileText, FlaskConical, Network, Map, Filter, Layers, BookOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type ProjectNavTab = "chapters" | "planning" | "simulations" | "graph" | "disambiguation";
+export type ProjectNavTab = "chapters" | "planning" | "cards" | "summaries" | "simulations" | "graph" | "disambiguation";
 
 interface ProjectNavProps {
   projectId: string;
@@ -18,6 +18,8 @@ const tabs: Array<{
 }> = [
   { id: "chapters", label: "章节", suffix: "", icon: FileText },
   { id: "planning", label: "规划中心", suffix: "/planning", icon: Map },
+  { id: "cards", label: "设定卡片", suffix: "/cards", icon: Layers },
+  { id: "summaries", label: "摘要", suffix: "/summaries", icon: BookOpen },
   { id: "simulations", label: "推演中心", suffix: "/simulations", icon: FlaskConical },
   { id: "graph", label: "关系图谱", suffix: "/graph", icon: Network },
   { id: "disambiguation", label: "消歧队列", suffix: "/disambiguation", icon: Filter },
@@ -25,6 +27,8 @@ const tabs: Array<{
 
 export function resolveProjectNavTab(pathname: string): ProjectNavTab {
   if (pathname.includes("/planning")) return "planning";
+  if (pathname.includes("/cards")) return "cards";
+  if (pathname.includes("/summaries")) return "summaries";
   if (pathname.includes("/simulations")) return "simulations";
   if (pathname.includes("/graph")) return "graph";
   if (pathname.includes("/disambiguation")) return "disambiguation";

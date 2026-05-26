@@ -31,6 +31,13 @@ import type {
   PolishAxesResponse,
   PolishRequest,
   PolishResponse,
+  CardPublic,
+  CardCreate,
+  EntityPublic,
+  EntityCreate,
+  EntityUpdate,
+  RelationshipPublic,
+  RelationshipCreate,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -67,6 +74,13 @@ export type {
   PolishAxesResponse,
   PolishRequest,
   PolishResponse,
+  CardPublic,
+  CardCreate,
+  EntityPublic,
+  EntityCreate,
+  EntityUpdate,
+  RelationshipPublic,
+  RelationshipCreate,
 };
 
 const BASE_URL = "/api/v1";
@@ -211,6 +225,22 @@ export function executeImport(sourcePath: string, title?: string) {
     method: "POST",
     body: JSON.stringify({ source_path: sourcePath, title }),
   });
+}
+
+export async function importZip(file: File): Promise<ProjectPublic> {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch(`${BASE_URL}/projects/import/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
+
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || "Import failed");
+  return data as ProjectPublic;
 }
 
 // ---- Chapters ----
@@ -405,4 +435,168 @@ export function updateSummary(projectId: string, summaryId: string, data: Summar
 
 export function deleteSummary(projectId: string, summaryId: string) {
   return request<void>(`/summaries/${projectId}/${summaryId}`, { method: "DELETE" });
+}
+
+export function generateSummary(projectId: string, data: { level: string; scope_label?: string; chapter_ids?: string[]; parent_id?: string }) {
+  return request<SummaryPublic & { key_events: string[]; character_arcs: string[]; cliffhangers: string[] }>(
+    `/summaries/${projectId}/generate`,
+    { method: "POST", body: JSON.stringify(data) }
+  );
+}
+
+// ---- Cards ----
+export function listCards(projectId: string, cardType?: string) {
+  const params = cardType ? `?card_type=${cardType}` : "";
+  return request<CardPublic[]>(`/projects/${projectId}/cards${params}`);
+}
+
+export function createCard(projectId: string, data: CardCreate) {
+  return request<CardPublic>(`/projects/${projectId}/cards`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCard(projectId: string, cardId: string) {
+  return request<void>(`/projects/${projectId}/cards/${cardId}`, { method: "DELETE" });
+}
+
+// ---- Entities ----
+export function listEntities(projectId: string, entityType?: string) {
+  const params = entityType ? `?entity_type=${entityType}` : "";
+  return request<EntityPublic[]>(`/projects/${projectId}/entities${params}`);
+}
+
+export function createEntity(projectId: string, data: EntityCreate) {
+  return request<EntityPublic>(`/projects/${projectId}/entities`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateEntity(projectId: string, entityId: string, data: EntityUpdate) {
+  return request<{ ok: boolean }>(`/projects/${projectId}/entities/${entityId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteEntity(projectId: string, entityId: string) {
+  return request<void>(`/projects/${projectId}/entities/${entityId}`, { method: "DELETE" });
+}
+
+// ---- Relationships ----
+export function listRelationships(projectId: string) {
+  return request<RelationshipPublic[]>(`/projects/${projectId}/relationships`);
+}
+
+export function createRelationship(projectId: string, data: RelationshipCreate) {
+  return request<RelationshipPublic>(`/projects/${projectId}/relationships`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+// ---- Search ----
+export interface SearchResult {
+  doc_id: string;
+  title: string;
+  content: string;
+  score: number;
+  meta: Record<string, unknown>;
+}
+
+export function searchProject(projectId: string, q: string, filter?: string) {
+  const params = new URLSearchParams({ q });
+  if (filter) params.set("filter", filter);
+  return request<SearchResult[]>(`/agents/search/${projectId}?${params.toString()}`);
+}
+
+// ---- Plugins ----
+export interface PluginInfo {
+  name: string;
+  display_name: string;
+  description: string;
+  version: string;
+  author: string;
+  enabled: boolean;
+  triggers: string[];
+  loaded: boolean;
+}
+
+export function listPlugins() {
+  return request<{ plugins: PluginInfo[]; total: number }>("/plugins");
+}
+
+export function togglePlugin(name: string, enabled: boolean) {
+  return request<{ name: string; enabled: boolean }>(`/plugins/${name}/toggle`, {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+}
+
+export function loadPlugin(name: string) {
+  return request<{ name: string; loaded: boolean }>(`/plugins/${name}/load`, {
+    method: "POST",
+  });
+}
+
+export function reloadPlugins() {
+  return request<{ discovered: number; plugins: PluginInfo[] }>("/plugins/reload", {
+    method: "POST",
+  });
+}
+
+// ---- Workflows ----
+export interface WorkflowAction {
+  name: string;
+  type: string;
+  config: Record<string, unknown>;
+}
+
+export interface WorkflowRule {
+  name: string;
+  trigger: string;
+  enabled: boolean;
+  actions: WorkflowAction[];
+  condition: Record<string, unknown>;
+}
+
+export function listWorkflows() {
+  return request<{ rules: WorkflowRule[]; total: number; builtin_count: number }>("/plugins/workflows");
+}
+
+// ---- Simulations ----
+export interface SimJob {
+  id: string;
+  project_id: string;
+  mode: string;
+  status: string;
+  progress: number;
+  mirofish_available: boolean;
+  report: Record<string, unknown> | null;
+  steps: Array<{ step: string; status: string; description: string }> | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export function listSimulations(projectId: string) {
+  return request<SimJob[]>(`/simulations?project_id=${projectId}`);
+}
+
+export function getSimulation(id: string) {
+  return request<SimJob>(`/simulations/${id}`);
+}
+
+export function createSimulation(data: { project_id: string; mode: string; sim_brief: string }) {
+  return request<SimJob>("/simulations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function adoptSimulation(simId: string) {
+  return request<{ success: boolean }>(`/simulations/${simId}/adopt`, {
+    method: "POST",
+  });
 }

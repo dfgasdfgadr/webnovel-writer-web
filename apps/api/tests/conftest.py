@@ -1,18 +1,30 @@
 import os
+import tempfile
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy import text
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import text, event
+from sqlalchemy.pool import NullPool
 
-# File-based SQLite with StaticPool to prevent lock conflicts on repeated/parallel runs
-TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_novelcraft.db"
+# Per-process temporary DB to avoid lock conflicts on parallel/repeated runs
+_test_db_fd, _test_db_path = tempfile.mkstemp(suffix=".db", prefix="novelcraft_test_")
+TEST_DATABASE_URL = f"sqlite+aiosqlite:///{_test_db_path}"
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 
 from app.main import app
 from app.database import Base, get_db
 
-engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=StaticPool)
+engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool)
+
+# Enable WAL mode + shared cache for SQLite concurrency
+@event.listens_for(engine.sync_engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
+
 TestSession = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -34,6 +46,13 @@ async def _setup_db():
     yield
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
+    # Clean up temp db file
+    try:
+        os.close(_test_db_fd)
+        os.unlink(_test_db_path)
+    except OSError:
+        pass
 
 
 @pytest_asyncio.fixture(autouse=True)

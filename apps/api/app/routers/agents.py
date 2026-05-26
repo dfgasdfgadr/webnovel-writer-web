@@ -934,8 +934,8 @@ async def polish_chapter(
 
 
 def _sse_event(event: str, data: dict) -> str:
-    """Format a Server-Sent Event with an event type and JSON data."""
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    """Format a Server-Sent Event with JSON data. No event: field — dispatch by data.type on client."""
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @router.get("/polish/{chapter_id}/stream")
@@ -981,7 +981,11 @@ async def stream_polish(
     ]
 
     async def generate():
-        llm = await LLMProvider.for_user(current_user.id, db)
+        try:
+            llm = await LLMProvider.for_user(current_user.id, db)
+        except Exception as e:
+            yield _sse_event("error", {"type": "error", "error": f"LLM 配置错误: {e}"})
+            return
         agent = PolishAgent(llm=llm)
 
         yield _sse_event("start", {"type": "start", "total_issues": len(issues_data)})
@@ -1009,6 +1013,7 @@ async def stream_polish(
                 else:
                     yield _sse_event("issue_error", {"type": "issue_error", "index": idx + 1, "issue_id": issue["id"], "error": polish_result.error})
             except Exception as e:
+                logger.exception("Polish issue %s failed", issue["id"])
                 yield _sse_event("issue_error", {"type": "issue_error", "index": idx + 1, "issue_id": issue["id"], "error": str(e)})
 
         yield _sse_event("done", {"type": "done", "updated_content": chapter.content})

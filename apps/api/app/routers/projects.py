@@ -1,10 +1,15 @@
+import io
 import json
 import logging
 import os
 import re
+import shutil
+import tempfile
+import zipfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,7 +109,7 @@ async def _generate_synopsis_from_premise(premise: dict, user_id: str, db: Async
     except Exception:
         logger.exception("ArchitectAgent synopsis generation failed")
         stub = _build_stub_synopsis(premise)
-        return stub, []
+        return stub, ["AI 总纲生成失败，已使用基础模板创建，请检查 LLM 配置"]
 
 
 def _build_stub_synopsis(premise: dict) -> dict:
@@ -437,6 +442,300 @@ async def import_project(
 
     await db.commit()
     return _project_public(project)
+
+
+# --- Init Chat SSE ---
+
+class InitChatMessage(BaseModel):
+    message: str
+    history: list[dict] = []
+
+
+class InitChatSchemesRequest(BaseModel):
+    """Request for creative constraint scheme generation."""
+    premise: dict
+
+
+@router.post("/init/chat/stream")
+async def init_chat_stream(
+    body: InitChatMessage,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE endpoint for multi-round conversational init.
+
+    Accepts user messages and returns the next AI question.
+    When all required fields are collected, returns creative constraint schemes.
+    """
+    from app.agents.init_chat import InitChatAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    agent = InitChatAgent(llm=llm)
+    if body.history:
+        agent.conversation = body.history
+
+    async def generate():
+        try:
+            result = await agent.process_message(body.message)
+            yield f"data: {json.dumps(result, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.exception("Init chat stream error")
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/init/schemes")
+async def generate_init_schemes(
+    body: InitChatSchemesRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate 2-3 creative constraint schemes from a premise."""
+    from app.agents.init_chat import InitChatAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    agent = InitChatAgent(llm=llm)
+    state = {
+        "title": body.premise.get("title", ""),
+        "genre": body.premise.get("genre", ""),
+        "hook": body.premise.get("hook", ""),
+        "protagonist_name": body.premise.get("protagonist", {}).get("name", ""),
+        "world_building": body.premise.get("world_building", {}).get("description", ""),
+        "power_system": body.premise.get("power_system", ""),
+        "golden_finger": body.premise.get("golden_finger", ""),
+        "constraints": body.premise.get("constraints", []),
+    }
+    return await agent._generate_schemes(state)
+
+
+class DeconstructRequest(BaseModel):
+    book_title: str
+    sample_chapters: list[str] = []
+    source_path: str = ""
+
+
+@router.post("/init/deconstruct/stream")
+async def deconstruct_stream(
+    body: DeconstructRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """SSE endpoint for reference book deconstruction analysis."""
+    from app.agents.deconstruct import DeconstructAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    chapters = body.sample_chapters
+    if body.source_path:
+        try:
+            from pathlib import Path
+            source = Path(body.source_path)
+            if source.is_dir():
+                # Scan for text files as sample chapters
+                text_files = sorted(source.glob("*.txt"))[:3]
+                for tf in text_files:
+                    chapters.append(tf.read_text(encoding="utf-8")[:3000])
+        except Exception:
+            logger.exception("Failed to read reference book chapters")
+
+    agent = DeconstructAgent(llm=llm) if llm else DeconstructAgent()
+
+    async def generate():
+        try:
+            if not chapters:
+                yield f"data: {json.dumps({'status': 'error', 'error': '未提供参考章节，请粘贴文本或指定路径'}, ensure_ascii=False)}\n\n"
+                return
+
+            yield f"data: {json.dumps({'status': 'analyzing', 'message': '正在分析参考书...'}, ensure_ascii=False)}\n\n"
+
+            result = await agent.analyze_book(body.book_title, chapters)
+            # Wrap result for safe transmission — do NOT write to canon
+            yield f"data: {json.dumps({'status': 'done', 'deconstruction': result, 'warning': '以上为拆解分析结果，并非最终设定。请确认后差异化写入。'}, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.exception("Deconstruct stream error")
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post("/import/upload", status_code=status.HTTP_201_CREATED)
+async def import_zip_upload(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import project from uploaded zip file.
+
+    The zip must contain at minimum: 正文/ 目录 with chapter .md files.
+    Optional: 设定集/ 大纲/ .story-system/ .webnovel/
+    """
+    if not file.filename or not file.filename.endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are accepted")
+
+    tmpdir = tempfile.mkdtemp(prefix="novelcraft_import_")
+    try:
+        content = await file.read()
+        zip_path = os.path.join(tmpdir, file.filename)
+        with open(zip_path, "wb") as f:
+            f.write(content)
+
+        extract_dir = os.path.join(tmpdir, "extracted")
+        os.makedirs(extract_dir, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for member in zf.namelist():
+                member_path = os.path.normpath(os.path.join(extract_dir, member))
+                if not member_path.startswith(os.path.normpath(extract_dir) + os.sep) and member_path != os.path.normpath(extract_dir):
+                    raise HTTPException(status_code=400, detail=f"Zip contains path traversal: {member}")
+            zf.extractall(extract_dir)
+
+        from app.services.import_project import scan_directory, copy_to_project, REQUIRED_DIRS
+
+        project_root = extract_dir
+        entries = [e for e in Path(extract_dir).iterdir() if e.is_dir()]
+        if len(entries) == 1:
+            sub = entries[0]
+            has_required = any((sub / d).is_dir() for d in REQUIRED_DIRS)
+            if has_required:
+                project_root = str(sub)
+
+        scan = scan_directory(str(project_root))
+        if not scan.valid:
+            raise HTTPException(status_code=400, detail=f"Zip 内容无效: {'; '.join(scan.errors)}")
+
+        from app.models.chapter import Chapter as ChapterModel, calculate_word_count
+        from app.models.card import Card
+
+        title = file.filename.replace(".zip", "") or scan.title or "导入项目"
+        slug = _slugify(title)
+        data_root = settings.novelcraft_data_root
+        root_dir = os.path.join(data_root, str(current_user.id), slug)
+
+        project = Project(
+            title=title,
+            description=f"从 {file.filename} 导入",
+            genre="",
+            owner_id=current_user.id,
+            root_dir=root_dir,
+        )
+        db.add(project)
+        await db.commit()
+        await db.refresh(project)
+
+        _ensure_dir_skeleton(root_dir)
+        try:
+            copy_to_project(scan, root_dir)
+        except Exception as e:
+            logger.exception("File copy failed during zip import")
+            raise HTTPException(status_code=500, detail=f"文件复制失败: {e}")
+
+        for ch in scan.chapters:
+            chapter = ChapterModel(
+                project_id=project.id,
+                title=ch["title"],
+                number=ch["number"],
+                content=ch["content"],
+                word_count=calculate_word_count(ch["content"]),
+                status="accepted",
+            )
+            db.add(chapter)
+
+        for sf in scan.settings_files:
+            card = Card(
+                project_id=project.id,
+                card_type="setting",
+                label=sf["name"],
+                content={"text": sf["content"], "filename": sf["filename"]},
+            )
+            db.add(card)
+
+        if scan.synopsis_raw:
+            project.synopsis_json = json.dumps(
+                {"synopsis": scan.synopsis_raw, "title": title},
+                ensure_ascii=False,
+            )
+
+        try:
+            ss = StorySystem(root_dir)
+            ss.save_master_setting({
+                "title": title,
+                "imported_from": file.filename,
+                "chapters_count": len(scan.chapters),
+                "created_at": project.created_at.isoformat() if project.created_at else "",
+            })
+        except Exception:
+            logger.exception("StorySystem init failed during zip import")
+
+        await db.commit()
+        return _project_public(project)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Zip import failed")
+        raise HTTPException(status_code=500, detail=f"导入失败: {e}")
+    finally:
+        try:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+        except Exception:
+            pass
+
+
+@router.get("/{project_id}/export")
+async def export_project(
+    project_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export project as a downloadable zip file."""
+    project = await _get_owned_project(project_id, current_user.id, db)
+
+    if not project.root_dir or not Path(project.root_dir).exists():
+        raise HTTPException(status_code=404, detail="Project directory not found")
+
+    root = Path(project.root_dir)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in root.rglob("*"):
+            if not f.is_file():
+                continue
+            # Skip internal .novelcraft dir (but keep .story-system)
+            if ".novelcraft" in f.parts:
+                continue
+            arcname = str(f.relative_to(root))
+            zf.write(f, arcname)
+
+    buf.seek(0)
+    safe_name = _slugify(project.title)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}.zip"',
+        },
+    )
 
 
 async def _get_owned_project(project_id: str, user_id: str, db: AsyncSession) -> Project:

@@ -11,7 +11,16 @@
 | 2 | MiroFish + LLM 设置 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
 | 3 | 质量与体验 | DONE | [PHASE3_HANDOFF.md](handoffs/PHASE3_HANDOFF.md) |
 | 4 | 生态与自动化 | DONE | [PHASE4_HANDOFF.md](handoffs/PHASE4_HANDOFF.md) |
-| 5 | 待规划 | PENDING | — |
+| 5 | 作者闭环与知识工作台 | DONE | [PHASE5_HANDOFF.md](handoffs/PHASE5_HANDOFF.md) |
+
+## PM 监控（Phase 5 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-26 | 已派单 | PM 签发 PHASE5_EXECUTION_BRIEF |
+| 2026-05-26 | **DONE** | Track 0 全部修复 + Track 1/2/3/4 全部功能；264 tests 全绿；PHASE5_HANDOFF 已生成
+
+---
 
 ## PM 监控（Phase 4 — 已完成）
 
@@ -67,6 +76,16 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-26：Phase 5 完成 — 作者闭环与知识工作台
+
+- **Track 0 信任修复**：6 项质量债全部修复（插件路径/SSE协议/LLM降级/slugify/CLI编码/测试隔离），全部带回归测试
+- **Track 1 智能开书**：InitChatAgent 多轮对话 SSE + 创意约束方案（2-3套+五维评分）+ DeconstructAgent SSE + 充分性闸门
+- **Track 2 知识工作台**：CardsPage（4类卡片CRUD）+ SummariesPage（3级摘要+AI生成）+ CommandSearch（Cmd+K BM25）+ ProjectHub（编辑/归档/zip导入）+ ProjectNav（cards/summaries tab）
+- **Track 3 平台与迁移**：PluginManager（list/toggle/load/reload）+ WorkflowView（YAML规则只读）+ zip上传导入（路径遍历防护）+ 项目导出zip + Simulations API统一（内联fetch→api.ts）
+- **Track 4 体验抛光**：NoKeyBanner（全局LLM未配置引导条）+ Recharts主题适配 + 1280px响应式复验
+- **测试**：162 API + 102 Web = 264 tests ALL PASS
+- **文档**：PHASE5_HANDOFF.md + PHASE5_BROWSER_ACCEPTANCE_ISSUES.md 已生成，CLAUDE.md → Phase 6，简报 STATUS=DONE
 
 ### 2026-05-25：Phase 4 完成 — 生态与自动化 + Init 对齐 Webnovel Writer
 
