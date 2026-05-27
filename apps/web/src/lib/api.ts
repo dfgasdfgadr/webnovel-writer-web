@@ -566,6 +566,13 @@ export function listWorkflows() {
   return request<{ rules: WorkflowRule[]; total: number; builtin_count: number }>("/plugins/workflows");
 }
 
+export function toggleWorkflowRule(name: string, enabled: boolean) {
+  return request<{ name: string; enabled: boolean }>(
+    `/plugins/workflows/${encodeURIComponent(name)}/toggle?enabled=${enabled}`,
+    { method: "POST" },
+  );
+}
+
 // ---- Simulations ----
 export interface SimJob {
   id: string;

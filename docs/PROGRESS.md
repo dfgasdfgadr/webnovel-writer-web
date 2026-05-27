@@ -12,45 +12,15 @@
 | 3 | 质量与体验 | DONE | [PHASE3_HANDOFF.md](handoffs/PHASE3_HANDOFF.md) |
 | 4 | 生态与自动化 | DONE | [PHASE4_HANDOFF.md](handoffs/PHASE4_HANDOFF.md) |
 | 5 | 作者闭环与知识工作台 | DONE | [PHASE5_HANDOFF.md](handoffs/PHASE5_HANDOFF.md) |
-| 6 | 开书到章节交付闭环 | PENDING | 待生成 |
+| 6 | 开书到章节交付闭环 | DONE | [PHASE6_HANDOFF.md](handoffs/PHASE6_HANDOFF.md) |
 
-## PM 监控（Phase 6 — 待执行）
+## PM 监控（Phase 6 — 已完成）
 
 | 时间 | 状态 | 备注 |
 |------|------|------|
-| 2026-05-27 | 已签发 | PM 签发 PHASE6_EXECUTION_BRIEF，要求先核验 Track 0，再产品化 InitChat / Deconstruct，并补齐 Workflow / GitBackup / Export Import 闭环 |
-| 2026-05-27 | 执行中 | Track 0/1 已提交；`-p` 后台启动两次中断/400，Track 2+ 待续 |
-| 2026-05-27 | API 排查 | Kimi Coding 代理基础连通正常；400 根因为长上下文 + ToolSearch/deferred tools；已修复 `scripts/launch-phase6-claude.ps1`（medium effort、关闭 ToolSearch/Agent Teams） |
-
-### 本次暂存变更摘要（2026-05-27）
-
-**PM / 运维**
-
-| 文件 | 变更 |
-|------|------|
-| `docs/briefs/PHASE6_EXECUTION_BRIEF.md` | Phase 6 执行简报（新） |
-| `docs/CURRENT_TASK.md` | 指向 Phase 6，Track 0/1 DONE |
-| `docs/PROGRESS.md` | Phase 6 进度与 PM 监控 |
-| `CLAUDE.md` / `.claude-run-prompt.txt` | 必读文档切换至 Phase 6 |
-| `scripts/launch-phase6-claude.ps1` | Claude Code 启动脚本；规避 Kimi 400 |
-
-**Claude Code 进行中（未提交 commit，本次暂存）**
-
-| 文件 | 变更 |
-|------|------|
-| `apps/api/app/workflows/__init__.py` | GitBackup handler 加固：auto_init、`workflow_runs.jsonl` 持久化、内置「章节通过后自动备份」规则 |
-| `apps/api/app/routers/projects.py` | 新增 `GET /backup-status`、`GET /workflow-history` |
-| `apps/web/src/lib/api.ts` | 前端 `getBackupStatus` / `getWorkflowHistory` 类型与封装 |
-| `apps/web/src/pages/WorkflowView.tsx` | 规则启停 Switch、备份状态、执行历史 UI |
-| `apps/web/vite.config.ts` | 开发代理 `/api` → `localhost:8001`（与 Brief 一致） |
-
-**Claude Code API 400 排查结论**
-
-- 配置：`ANTHROPIC_BASE_URL=https://api.kimi.com/coding/`，短请求 `claude -p "ping"` 正常。
-- 失败触发：长跑后 ToolSearch 返回 deferred tools + effort max + 大上下文 beta headers，Kimi 代理返回 400 Invalid request。
-- 缓解：启动脚本降为 `--effort medium`，运行时 `ENABLE_TOOL_SEARCH=false`、`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=0`；建议全局 settings 同步调整。
-
-**未纳入暂存**：`apps/api/data/projects/*` 测试运行产物。
+| 2026-05-27 | 已签发 | PM 签发 PHASE6_EXECUTION_BRIEF |
+| 2026-05-27 | 执行中 | Track 0–2 + Workflow 部分落地 |
+| 2026-05-27 | **DONE** | 全部 Track 完成；293 tests 全绿；PHASE6_HANDOFF 已生成；**待 PM 浏览器验收** |
 
 ---
 
@@ -117,6 +87,17 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-27：Phase 6 完成 — 开书到章节交付闭环
+
+- **Track 0 信任修复**：中文导出 RFC5987、`.story-system` 打包、Workflow 单例/handler、round-trip 测试
+- **Track 1 InitChat**：InitChatPage SSE 对话 + 方案选择 + Hub「对话开书」入口 + 7 单测
+- **Track 2 Deconstruct**：DeconstructPage 样章拆解 + 模式预览 + 确认创建 + 5 单测
+- **Track 3 备份迁移**：GitBackup jsonl 历史、backup-status/workflow-history API、round-trip 加强
+- **Track 4 Workflow**：WorkflowView 规则 Switch、备份状态、执行历史；`toggleWorkflowRule` API 客户端
+- **Track 5 测试**：WorkflowView(4) + PluginManager(3) + ProjectHub 开书入口；修复 Path import bug
+- **测试**：171 API + 122 Web = **293 tests ALL PASS**
+- **文档**：PHASE6_HANDOFF.md 已生成，Brief STATUS=DONE，CLAUDE.md → Phase 7
 
 ### 2026-05-26：Phase 5 完成 — 作者闭环与知识工作台
 

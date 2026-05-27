@@ -54,4 +54,12 @@ describe("ProjectHub — import UI", () => {
       expect(screen.getByText("扫描")).toBeInTheDocument();
     });
   });
+
+  it("renders onboarding entry links", async () => {
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getAllByText("对话开书").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("拆书").length).toBeGreaterThan(0);
+    });
+  });
 });

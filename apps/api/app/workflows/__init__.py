@@ -1,5 +1,7 @@
 """Workflow DSL engine — YAML trigger-based workflow execution."""
 
+from pathlib import Path
+
 from app.workflows.engine import WorkflowEngine, WorkflowTrigger
 
 __all__ = ["WorkflowEngine", "WorkflowTrigger", "get_workflow_engine"]

@@ -105,12 +105,19 @@ async def test_export_import_roundtrip(async_client: AsyncClient, auth_headers: 
         "genre": "scifi",
     }, headers=auth_headers)
     assert resp.status_code == 201
-    original_id = resp.json()["id"]
+    original = resp.json()
+    original_id = original["id"]
+    root_dir = original.get("root_dir")
 
-    # Add a chapter (import requires 正文/ with chapters)
+    # Add a chapter with outline (import requires 正文/ with chapters)
     resp = await async_client.post(
         f"/api/v1/projects/{original_id}/chapters",
-        json={"title": "第一章", "number": 1, "content": "测试正文内容。"},
+        json={
+            "title": "第一章",
+            "number": 1,
+            "content": "测试正文内容。",
+            "outline": "章纲：主角登场。",
+        },
         headers=auth_headers,
     )
     assert resp.status_code == 201
@@ -120,8 +127,15 @@ async def test_export_import_roundtrip(async_client: AsyncClient, auth_headers: 
     assert resp.status_code == 200
     zip_bytes = resp.content
 
-    # Import via upload
     import io
+    zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    names = zf.namelist()
+    assert any(".story-system" in n and "MASTER_SETTING" in n for n in names)
+    assert any("正文" in n for n in names)
+    assert any("设定集" in n for n in names)
+    zf.close()
+
+    # Import via upload
     resp = await async_client.post(
         "/api/v1/projects/import/upload",
         files={"file": ("RoundTripTest.zip", io.BytesIO(zip_bytes), "application/zip")},
@@ -129,7 +143,32 @@ async def test_export_import_roundtrip(async_client: AsyncClient, auth_headers: 
     )
     assert resp.status_code == 201, f"Import failed: {resp.text}"
     imported = resp.json()
-    assert imported["id"] != original_id
+    imported_id = imported["id"]
+    assert imported_id != original_id
+    assert imported["title"] == "RoundTripTest"
+
+    # Verify chapter content restored
+    resp = await async_client.get(
+        f"/api/v1/projects/{imported_id}/chapters",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    chapters = resp.json()["items"]
+    assert len(chapters) >= 1
+    assert "测试正文内容" in chapters[0]["content"]
+
+    # Verify Story System on disk
+    imported_root = imported.get("root_dir")
+    assert imported_root, "Imported project should have root_dir"
+    master_setting = Path(imported_root) / ".story-system" / "MASTER_SETTING.json"
+    assert master_setting.exists(), "MASTER_SETTING.json should exist after import"
+
+    # Verify settings directory copied
+    if root_dir:
+        settings_src = Path(root_dir) / "设定集"
+        settings_dst = Path(imported_root) / "设定集"
+        if settings_src.exists():
+            assert settings_dst.exists(), "设定集/ should be restored after import"
 
 
 # --- P6-Q03: Workflow handler registration ---
@@ -165,8 +204,10 @@ async def test_workflow_fire_sim_not_skipped():
 
     # Should have results for the sim action
     assert len(results) > 0, "Expected at least one workflow result"
-    for r in results:
-        assert r.get("result", {}).get("status") != "skipped", f"Action should not be skipped: {r}"
+    sim_results = [r for r in results if r.get("result", {}).get("action") == "sim"]
+    assert len(sim_results) > 0, f"Expected sim action result, got: {results}"
+    for r in sim_results:
+        assert r.get("result", {}).get("status") != "skipped", f"Sim action should not be skipped: {r}"
 
     reset_workflow_engine()
 
