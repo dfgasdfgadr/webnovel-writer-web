@@ -208,11 +208,17 @@ export function ProjectHub() {
             {projects.length} 个项目
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/projects/new/wizard">
-            <Button variant="outline" className="gap-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link to="/projects/new/chat">
+            <Button className="gap-1.5">
               <Sparkles className="size-4" />
-              深度初始化
+              对话开书
+            </Button>
+          </Link>
+          <Link to="/projects/new/wizard">
+            <Button variant="outline" className="gap-1.5" size="sm">
+              <BookOpen className="size-4" />
+              静态向导
             </Button>
           </Link>
 

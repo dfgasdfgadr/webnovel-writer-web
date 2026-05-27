@@ -600,3 +600,151 @@ export function adoptSimulation(simId: string) {
     method: "POST",
   });
 }
+
+// ---- InitChat SSE ----
+export interface InitChatMessage {
+  role: string;
+  content: string;
+}
+
+export interface InitScheme {
+  name: string;
+  genre_focus: string;
+  hook_variation: string;
+  power_evolution: string;
+  target_scale: string;
+  scores: {
+    innovation: number;
+    marketability: number;
+    coherence: number;
+    depth: number;
+    readability: number;
+  };
+}
+
+export interface InitChatResponse {
+  status: "asking" | "complete" | "confirmed" | "error";
+  missing_fields?: string[];
+  question?: string;
+  hint?: string;
+  schemes?: InitScheme[];
+  error?: string;
+}
+
+/** POST-based SSE stream for InitChat. Parses `data: {...}\n\n` lines. */
+export async function* initChatStream(
+  message: string,
+  history: InitChatMessage[]
+): AsyncGenerator<InitChatResponse, void, unknown> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}/projects/init/chat/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ message, history }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Init chat failed: ${res.status}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("data: ")) {
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") return;
+        try {
+          yield JSON.parse(payload) as InitChatResponse;
+        } catch {
+          // ignore unparseable lines
+        }
+      }
+    }
+  }
+}
+
+export function initSchemes(premise: Record<string, unknown>) {
+  return request<{ status: string; schemes?: InitScheme[]; error?: string }>("/projects/init/schemes", {
+    method: "POST",
+    body: JSON.stringify({ premise }),
+  });
+}
+
+// ---- Deconstruct SSE ----
+export interface DeconstructResponse {
+  status: "analyzing" | "done" | "error";
+  message?: string;
+  deconstruction?: {
+    golden_chapters?: string[];
+    hooks?: string[];
+    character_patterns?: string[];
+    world_patterns?: string[];
+    pacing?: string[];
+    transferable_patterns?: string[];
+    red_flags?: string[];
+  };
+  warning?: string;
+  error?: string;
+}
+
+/** POST-based SSE stream for Deconstruct. */
+export async function* deconstructStream(
+  bookTitle: string,
+  sampleChapters: string[]
+): AsyncGenerator<DeconstructResponse, void, unknown> {
+  const token = getToken();
+  const res = await fetch(`${BASE_URL}/projects/init/deconstruct/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ book_title: bookTitle, sample_chapters: sampleChapters }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `Deconstruct failed: ${res.status}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("data: ")) {
+        const payload = trimmed.slice(6);
+        if (payload === "[DONE]") return;
+        try {
+          yield JSON.parse(payload) as DeconstructResponse;
+        } catch {
+          // ignore unparseable lines
+        }
+      }
+    }
+  }
+}

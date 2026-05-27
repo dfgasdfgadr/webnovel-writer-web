@@ -16,6 +16,7 @@ import { SimulationCenter } from "@/pages/SimulationCenter";
 import { ReviewPage } from "@/pages/ReviewPage";
 import { PlanningCenter } from "@/pages/PlanningCenter";
 import { DeepInitWizard } from "@/pages/DeepInitWizard";
+import { InitChatPage } from "@/pages/InitChatPage";
 import { DisambiguationQueue } from "@/pages/DisambiguationQueue";
 import { CardsPage } from "@/pages/CardsPage";
 import { SummariesPage } from "@/pages/SummariesPage";
@@ -72,6 +73,7 @@ export default function App() {
               >
                 <Route path="/" element={<ProjectHub />} />
                 <Route path="/projects/new/wizard" element={<DeepInitWizard />} />
+                <Route path="/projects/new/chat" element={<InitChatPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/plugins" element={<PluginManager />} />
                 <Route path="/settings/workflows" element={<WorkflowView />} />
