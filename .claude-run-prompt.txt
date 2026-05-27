@@ -1,17 +1,18 @@
 你是 NovelCraft 唯一执行者。
 
-先读 docs/briefs/PHASE5_EXECUTION_BRIEF.md（Phase 5 执行简报，PM 已签发，STATUS=IN_PROGRESS）。
-再读 docs/handoffs/PHASE4_HANDOFF.md 与 .claude-instructions.md。
+先读 docs/briefs/PHASE6_EXECUTION_BRIEF.md（Phase 6 执行简报，PM 已签发，STATUS=PENDING）。
+再读 docs/handoffs/PHASE5_HANDOFF.md、.cursor/plans/产品后续规划_c42d14d8.plan.md 与 .claude-instructions.md。
 
 ## 执行顺序
 
-1. **Track 0（信任修复，Gate）**：P5-Q01~Q06 六个质量债，全部 PASS 后才能进入新功能
-2. **Track 1（智能开书）**：P5-INIT01~INIT05
-3. **Track 2（知识工作台）**：P5-KM01~KM06
-4. **Track 3（平台与迁移）**：P5-ECO01~ECO02 + P5-DATA01~DATA03
-5. **Track 4（体验抛光）**：P5-UX01~UX03（时间允许）
+1. **Track 0（信任修复与现状核验，Gate）**：P6-Q01~Q05。已有实现先核验，不要重复重写；全部 PASS 后才能进入新功能。
+2. **Track 1（InitChat 前端产品化）**：P6-INIT01~INIT05。
+3. **Track 2（Deconstruct 前端产品化）**：P6-DEC01~DEC05。
+4. **Track 3（备份与迁移可靠性）**：P6-DATA01~DATA04。
+5. **Track 4（Workflow 最小可用闭环）**：P6-WF01~WF04。
+6. **Track 5（前端测试与体验补齐）**：P6-TEST01~TEST04 + P6-UX01。
 
-每完成一个 Track：git commit，运行 pnpm test 确认全绿。
-Phase 完成：简报 STATUS=DONE + docs/handoffs/PHASE5_HANDOFF.md + 通知 PM 做浏览器验收。
+每完成一个大步骤：运行相关测试并 git commit，commit message 用中文简述 why。
+Phase 完成：简报 STATUS=DONE + docs/handoffs/PHASE6_HANDOFF.md + pnpm test 全绿 + 通知 PM 做浏览器验收。
 
 自主完成，不要等待确认。

@@ -760,6 +760,90 @@ async def export_project(
     )
 
 
+@router.get("/{project_id}/backup-status")
+async def get_project_backup_status(
+    project_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get the most recent git backup status for a project."""
+    project = await _get_owned_project(project_id, current_user.id, db)
+    if not project.root_dir:
+        return {"enabled": False, "status": "no_root_dir", "last_run": None}
+
+    root = Path(project.root_dir)
+    runs_file = root / ".novelcraft" / "workflow_runs.jsonl"
+
+    runs = []
+    if runs_file.exists():
+        import json
+        with open(runs_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                    if record.get("action") == "git_backup":
+                        runs.append(record)
+                except json.JSONDecodeError:
+                    continue
+
+    # Check if git_backup rule is enabled
+    from app.workflows import get_workflow_engine
+    engine = get_workflow_engine()
+    git_rule = next(
+        (r for r in engine.rules if r.name == "章节通过后自动备份"),
+        None,
+    )
+    enabled = git_rule.enabled if git_rule else False
+
+    if runs:
+        last = runs[-1]
+        return {
+            "enabled": enabled,
+            "status": last.get("status", "unknown"),
+            "last_run": last.get("timestamp"),
+            "chapter_num": last.get("chapter_num"),
+            "reason": last.get("reason"),
+            "total_runs": len(runs),
+        }
+    return {"enabled": enabled, "status": "never_run", "last_run": None}
+
+
+@router.get("/{project_id}/workflow-history")
+async def get_project_workflow_history(
+    project_id: str,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get workflow execution history for a project."""
+    project = await _get_owned_project(project_id, current_user.id, db)
+    if not project.root_dir:
+        return {"runs": [], "total": 0}
+
+    root = Path(project.root_dir)
+    runs_file = root / ".novelcraft" / "workflow_runs.jsonl"
+
+    runs = []
+    if runs_file.exists():
+        import json
+        with open(runs_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    runs.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+
+    # Return most recent first, limited
+    runs.reverse()
+    return {"runs": runs[:limit], "total": len(runs)}
+
+
 async def _get_owned_project(project_id: str, user_id: str, db: AsyncSession) -> Project:
     result = await db.execute(
         select(Project).where(Project.id == project_id, Project.owner_id == user_id)

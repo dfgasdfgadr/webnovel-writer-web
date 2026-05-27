@@ -748,3 +748,31 @@ export async function* deconstructStream(
     }
   }
 }
+
+// ---- Backup & Workflow History ----
+export interface BackupStatus {
+  enabled: boolean;
+  status: string;
+  last_run: string | null;
+  chapter_num?: string;
+  reason?: string;
+  total_runs?: number;
+}
+
+export function getBackupStatus(projectId: string) {
+  return request<BackupStatus>(`/projects/${projectId}/backup-status`);
+}
+
+export interface WorkflowRun {
+  timestamp: string;
+  trigger: string;
+  action: string;
+  status: string;
+  chapter_num?: string;
+  reason?: string;
+}
+
+export function getWorkflowHistory(projectId: string, limit?: number) {
+  const params = limit ? `?limit=${limit}` : "";
+  return request<{ runs: WorkflowRun[]; total: number }>(`/projects/${projectId}/workflow-history${params}`);
+}

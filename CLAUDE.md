@@ -13,7 +13,7 @@
 3. `.claude-instructions.md` — 全局强制规则（含阶段交接文档 + 执行简报流程）
 4. `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 对应 Phase 章节与验收标准
 
-**当前 Phase 5 必读**：`PHASE5_EXECUTION_BRIEF.md`（已完成 2026-05-26） → `PHASE5_HANDOFF.md`
+**当前 Phase 6 必读**：`PHASE6_EXECUTION_BRIEF.md`（PM 已签发） → `PHASE5_HANDOFF.md`
 
 生成本阶段 handoff 时参考：`docs/handoffs/HANDOFF_TEMPLATE.md`
 
