@@ -17,6 +17,7 @@ import { ReviewPage } from "@/pages/ReviewPage";
 import { PlanningCenter } from "@/pages/PlanningCenter";
 import { DeepInitWizard } from "@/pages/DeepInitWizard";
 import { InitChatPage } from "@/pages/InitChatPage";
+import { DeconstructPage } from "@/pages/DeconstructPage";
 import { DisambiguationQueue } from "@/pages/DisambiguationQueue";
 import { CardsPage } from "@/pages/CardsPage";
 import { SummariesPage } from "@/pages/SummariesPage";
@@ -74,6 +75,7 @@ export default function App() {
                 <Route path="/" element={<ProjectHub />} />
                 <Route path="/projects/new/wizard" element={<DeepInitWizard />} />
                 <Route path="/projects/new/chat" element={<InitChatPage />} />
+                <Route path="/projects/new/deconstruct" element={<DeconstructPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/settings/plugins" element={<PluginManager />} />
                 <Route path="/settings/workflows" element={<WorkflowView />} />

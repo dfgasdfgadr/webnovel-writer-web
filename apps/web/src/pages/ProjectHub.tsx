@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen, Sparkles, FileArchive } from "lucide-react";
+import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen, Sparkles, FileArchive, Scissors } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -219,6 +219,12 @@ export function ProjectHub() {
             <Button variant="outline" className="gap-1.5" size="sm">
               <BookOpen className="size-4" />
               静态向导
+            </Button>
+          </Link>
+          <Link to="/projects/new/deconstruct">
+            <Button variant="outline" className="gap-1.5" size="sm">
+              <Scissors className="size-4" />
+              拆书
             </Button>
           </Link>
 
