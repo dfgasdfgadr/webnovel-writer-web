@@ -75,9 +75,10 @@ async def list_workflows(
     current_user: User = Depends(get_current_user),
 ):
     """List built-in and plugin workflow rules."""
-    from app.workflows.engine import WorkflowEngine, BUILTIN_RULES
+    from app.workflows import get_workflow_engine
+    from app.workflows.engine import BUILTIN_RULES
 
-    engine = WorkflowEngine()
+    engine = get_workflow_engine()
     rules = []
     for rule in engine.rules:
         rules.append({
@@ -92,3 +93,19 @@ async def list_workflows(
         })
 
     return {"rules": rules, "total": len(rules), "builtin_count": len(BUILTIN_RULES)}
+
+
+@router.post("/workflows/{rule_name}/toggle")
+async def toggle_workflow_rule(
+    rule_name: str,
+    enabled: bool,
+    current_user: User = Depends(get_current_user),
+):
+    """Enable or disable a workflow rule by name."""
+    from app.workflows import get_workflow_engine
+
+    engine = get_workflow_engine()
+    found = engine.set_rule_enabled(rule_name, enabled)
+    if not found:
+        raise HTTPException(status_code=404, detail=f"Workflow rule not found: {rule_name}")
+    return {"name": rule_name, "enabled": enabled}

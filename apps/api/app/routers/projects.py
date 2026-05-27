@@ -266,10 +266,10 @@ async def create_project(
         "created_at": project.created_at.isoformat() if project.created_at else "",
     })
 
-    # Fire workflow trigger: onProjectCreate
+    # Fire workflow trigger: onProjectCreate (uses shared engine singleton)
     try:
-        from app.workflows.engine import WorkflowEngine, WorkflowTrigger
-        wf = WorkflowEngine()
+        from app.workflows import get_workflow_engine, WorkflowTrigger
+        wf = get_workflow_engine()
         await wf.fire(WorkflowTrigger.ON_PROJECT_CREATE, {
             "project_id": project.id,
             "title": project.title,
@@ -718,22 +718,44 @@ async def export_project(
     root = Path(project.root_dir)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Ensure required empty directories are included
+        for dirname in ["设定集", "大纲", "正文", ".story-system"]:
+            dirpath = root / dirname
+            if dirpath.is_dir():
+                zf.mkdir(str(dirpath.relative_to(root)))
+        # Add files from disk (skip .novelcraft)
         for f in root.rglob("*"):
             if not f.is_file():
                 continue
-            # Skip internal .novelcraft dir (but keep .story-system)
             if ".novelcraft" in f.parts:
                 continue
             arcname = str(f.relative_to(root))
             zf.write(f, arcname)
+        # Include DB chapters as 正文/ chapter files
+        from app.models.chapter import Chapter as ChapterModel
+        result = await db.execute(
+            select(ChapterModel).where(ChapterModel.project_id == project_id).order_by(ChapterModel.number)
+        )
+        chapters = result.scalars().all()
+        for ch in chapters:
+            padded = str(ch.number).zfill(3)
+            safe_title = re.sub(r'[^\w\s-]', '', ch.title or f"第{ch.number}章").strip()[:30]
+            filename = f"正文/第{padded}章-{safe_title}.md"
+            content = ch.content or ""
+            zf.writestr(filename, content)
 
     buf.seek(0)
     safe_name = _slugify(project.title)
+    # RFC 5987: filename must be pure ASCII (latin-1 safe); use filename*=UTF-8'' for actual name
+    from urllib.parse import quote
+    ascii_fallback = project.id[:8]
+    encoded_name = quote(f"{safe_name}.zip", safe="")
+    content_disp = f'attachment; filename="{ascii_fallback}.zip"; filename*=UTF-8\'\'{encoded_name}'
     return StreamingResponse(
         buf,
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="{safe_name}.zip"',
+            "Content-Disposition": content_disp,
         },
     )
 

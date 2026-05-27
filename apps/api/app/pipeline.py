@@ -4,11 +4,14 @@ Flow: plan → context → draft → review → polish → extract → commit �
 """
 
 import json
+import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import AsyncIterator
+
+logger = logging.getLogger("novelcraft.pipeline")
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -250,14 +253,15 @@ class WritingPipeline:
         self.story.write_review(self.chapter_num, {"issues": issues})
         self.harness.save_state({"phase": "writing", "last_chapter": self.chapter_num})
 
-        # Fire workflow trigger: onChapterAccepted
+        # Fire workflow trigger: onChapterAccepted (uses shared engine singleton)
         try:
-            from app.workflows.engine import WorkflowEngine, WorkflowTrigger
-            wf = WorkflowEngine()
+            from app.workflows import get_workflow_engine, WorkflowTrigger
+            wf = get_workflow_engine()
             await wf.fire(WorkflowTrigger.ON_CHAPTER_ACCEPTED, {
                 "chapter_id": self.chapter_id,
                 "project_id": self.project_id,
                 "chapter_num": self.chapter_num,
+                "project_root": str(self.harness.project_root),
                 "status": chapter.status if chapter else "accepted",
             })
         except Exception:
