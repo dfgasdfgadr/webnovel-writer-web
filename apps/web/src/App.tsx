@@ -23,6 +23,7 @@ import { CardsPage } from "@/pages/CardsPage";
 import { SummariesPage } from "@/pages/SummariesPage";
 import { PluginManager } from "@/pages/PluginManager";
 import { WorkflowView } from "@/pages/WorkflowView";
+import { PromptWorkshop } from "@/pages/PromptWorkshop";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -85,6 +86,7 @@ export default function App() {
                 <Route path="/projects/:projectId/summaries" element={<SummariesPage />} />
                 <Route path="/projects/:projectId/graph" element={<GraphView />} />
                 <Route path="/projects/:projectId/simulations" element={<SimulationCenter />} />
+                <Route path="/projects/:projectId/prompts" element={<PromptWorkshop />} />
                 <Route path="/projects/:projectId/disambiguation" element={<DisambiguationQueue />} />
                 <Route
                   path="/projects/:projectId/chapters/:chapterId"

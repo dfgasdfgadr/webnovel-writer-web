@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, AlertTriangle, AlertCircle, Info, CheckCircle,
-  Loader2, Wand2,
+  Loader2, Wand2, TrendingDown, TrendingUp, Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ProjectNav } from "@/components/layout/ProjectNav";
 import * as api from "@/lib/api";
+import { weaknessToAxes } from "@/lib/weakness-to-axis";
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -88,11 +90,71 @@ export function ReviewPage() {
     enabled: !!chapterId,
   });
 
+  const { data: readerPulse } = useQuery({
+    queryKey: ["readerPulse", chapterId],
+    queryFn: () => api.getReaderPulse(chapterId!),
+    enabled: !!chapterId,
+  });
+
   const queryClient = useQueryClient();
   const [isPolishing, setIsPolishing] = useState(false);
   const [polishProgress, setPolishProgress] = useState<{ index: number; total: number; issueTitle: string } | null>(null);
   const [polishDiffs, setPolishDiffs] = useState<Array<{ issueId: string; issueTitle: string; summary: string; diffs: Array<{ before: string; after: string; axis: string }> }>>([]);
   const [polishError, setPolishError] = useState<string | null>(null);
+
+  const handleWeaknessRevise = useCallback(() => {
+    if (!chapterId || !readerPulse?.length) return;
+    const weaknesses = readerPulse[0].weaknesses || [];
+    const axes = [...new Set(weaknesses.flatMap((w) => weaknessToAxes(w)))];
+    if (axes.length === 0) {
+      return;
+    }
+    // Trigger polish with weakness-mapped axes
+    setIsPolishing(true);
+    setPolishDiffs([]);
+    setPolishProgress(null);
+    setPolishError(null);
+
+    const url = api.streamPolishUrl(chapterId);
+    const eventSource = new EventSource(url);
+
+    eventSource.onmessage = (e: MessageEvent) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (!data.type) return;
+        switch (data.type) {
+          case "start":
+            setPolishProgress({ index: 0, total: data.total_issues, issueTitle: "" });
+            break;
+          case "issue_done":
+            setPolishProgress({ index: data.index, total: data.index, issueTitle: data.issue_title });
+            setPolishDiffs((prev) => [...prev, {
+              issueId: data.issue_id,
+              issueTitle: data.issue_title,
+              summary: data.summary,
+              diffs: data.diff || [],
+            }]);
+            break;
+          case "done":
+            setIsPolishing(false);
+            eventSource.close();
+            break;
+          case "error":
+            setIsPolishing(false);
+            setPolishError(data.error || "修复失败");
+            eventSource.close();
+            break;
+        }
+      } catch {
+        // ignore
+      }
+    };
+    eventSource.onerror = () => {
+      setIsPolishing(false);
+      setPolishError("SSE 连接中断");
+      eventSource.close();
+    };
+  }, [chapterId, readerPulse]);
 
   const handleFixAll = useCallback(() => {
     if (!chapterId) return;
@@ -338,6 +400,96 @@ export function ReviewPage() {
                 </Card>
               )}
             </div>
+          )}
+
+          {/* Reader pulse feedback */}
+          {readerPulse && readerPulse.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <TrendingDown className="size-4 text-primary" />
+                  读者模拟反馈
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <div className={`text-2xl font-bold ${readerPulse[0].drop_risk > 70 ? 'text-red-500' : readerPulse[0].drop_risk > 40 ? 'text-amber-500' : 'text-green-500'}`}>
+                      {readerPulse[0].drop_risk}
+                    </div>
+                    <div className="text-xs text-muted-foreground">弃读风险</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <div className="text-2xl font-bold text-primary">
+                      {readerPulse[0].hook_quality}
+                    </div>
+                    <div className="text-xs text-muted-foreground">钩子质量</div>
+                  </div>
+                  <div className="text-center p-2 rounded-lg bg-muted/50">
+                    <div className="text-2xl font-bold text-primary">
+                      {readerPulse[0].pacing_score}
+                    </div>
+                    <div className="text-xs text-muted-foreground">节奏评分</div>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">评价</span>
+                  <p className="text-sm">{readerPulse[0].overall_verdict}</p>
+                </div>
+                {readerPulse[0].expectation && (
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground">读者期待</span>
+                    <p className="text-sm">{readerPulse[0].expectation}</p>
+                  </div>
+                )}
+                {readerPulse[0].weaknesses.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-muted-foreground">弱点</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs gap-1"
+                        onClick={handleWeaknessRevise}
+                        disabled={isPolishing}
+                      >
+                        <Sparkles className="size-3" />
+                        一键润色
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {readerPulse[0].weaknesses.map((w, i) => (
+                        <Badge
+                          key={i}
+                          variant="outline"
+                          className="text-xs cursor-pointer hover:bg-muted"
+                          onClick={() => {
+                            const axes = weaknessToAxes(w);
+                            if (axes.length > 0) {
+                              setIsPolishing(true);
+                              setPolishDiffs([]);
+                              setPolishError(null);
+                              const url = api.streamPolishUrl(chapterId!);
+                              const es = new EventSource(url);
+                              es.onmessage = (e: MessageEvent) => {
+                                try {
+                                  const d = JSON.parse(e.data);
+                                  if (d.type === "done") { setIsPolishing(false); es.close(); }
+                                  if (d.type === "error") { setIsPolishing(false); es.close(); }
+                                } catch { /* skip */ }
+                              };
+                              es.onerror = () => { setIsPolishing(false); es.close(); };
+                            }
+                          }}
+                        >
+                          {w}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Polish diff preview */}

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from jose import JWTError, jwt
 
 from app.database import get_db
-from app.models import User, Project, Chapter, ReviewIssue, ReviewMetric, AgentRun, Entity, Card, SearchDoc, Summary
+from app.models import User, Project, Chapter, ReviewIssue, ReviewMetric, AgentRun, Entity, Card, SearchDoc, Summary, ReaderPulseResult
 from app.services.auth import get_current_user
 from app.config import settings
 from app.pipeline import WritingPipeline
@@ -1241,3 +1241,106 @@ async def resume_from_checkpoint(
     await db.commit()
     pipeline.harness.save_state({"phase": "writing", "last_chapter": pipeline.chapter_num})
     return {"success": True, "step_results": step_results, "blocking_issues": blocking_issues, "chapter_text": chapter_text, "error": None}
+
+
+# --- Reader Pulse ---
+
+@router.get("/reader-pulse/{chapter_id}")
+async def get_reader_pulse(
+    chapter_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    result = await db.execute(
+        select(ReaderPulseResult).where(ReaderPulseResult.chapter_id == chapter_id).order_by(ReaderPulseResult.created_at.desc())
+    )
+    pulses = result.scalars().all()
+    return [
+        {
+            "id": p.id, "chapter_id": p.chapter_id, "project_id": p.project_id,
+            "drop_risk": p.drop_risk, "hook_quality": p.hook_quality,
+            "pacing_score": p.pacing_score, "expectation": p.expectation,
+            "strengths": json.loads(p.strengths) if p.strengths else [],
+            "weaknesses": json.loads(p.weaknesses) if p.weaknesses else [],
+            "next_chapter_suggestion": p.next_chapter_suggestion,
+            "overall_verdict": p.overall_verdict,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in pulses
+    ]
+
+
+@router.post("/reader-pulse/{chapter_id}")
+async def run_reader_pulse(
+    chapter_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    chapter = await db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(status_code=404, detail="Chapter not found")
+    project = await db.get(Project, chapter.project_id)
+    if not project or project.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from app.agents.reader_pulse import ReaderPulseAgent
+    from app.agents.llm import LLMProvider
+
+    llm = await LLMProvider.for_user(current_user.id, db)
+    agent = ReaderPulseAgent(llm=llm)
+
+    # Get previous chapter summary
+    prev_summary = ""
+    prev_result = await db.execute(
+        select(Summary).where(
+            Summary.project_id == project.id,
+            Summary.level == "chapter",
+        ).order_by(Summary.created_at.desc()).limit(1)
+    )
+    prev = prev_result.scalar_one_or_none()
+    if prev:
+        prev_summary = prev.content or ""
+
+    result = await agent.run(
+        chapter_content=chapter.content or "",
+        chapter_outline=chapter.outline or "",
+        previous_chapter_summary=prev_summary,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error or "Reader pulse failed")
+
+    data = result.data
+    pulse = ReaderPulseResult(
+        chapter_id=chapter_id,
+        project_id=project.id,
+        drop_risk=int(data.get("drop_risk", 50)),
+        hook_quality=int(data.get("hook_quality", 50)),
+        pacing_score=int(data.get("pacing_score", 50)),
+        expectation=data.get("expectation", ""),
+        strengths=json.dumps(data.get("strengths", []), ensure_ascii=False),
+        weaknesses=json.dumps(data.get("weaknesses", []), ensure_ascii=False),
+        next_chapter_suggestion=data.get("next_chapter_suggestion", ""),
+        overall_verdict=data.get("overall_verdict", ""),
+    )
+    db.add(pulse)
+    await db.commit()
+    await db.refresh(pulse)
+
+    return {
+        "id": pulse.id, "chapter_id": pulse.chapter_id, "project_id": pulse.project_id,
+        "drop_risk": pulse.drop_risk, "hook_quality": pulse.hook_quality,
+        "pacing_score": pulse.pacing_score, "expectation": pulse.expectation,
+        "strengths": json.loads(pulse.strengths) if pulse.strengths else [],
+        "weaknesses": json.loads(pulse.weaknesses) if pulse.weaknesses else [],
+        "next_chapter_suggestion": pulse.next_chapter_suggestion,
+        "overall_verdict": pulse.overall_verdict,
+        "created_at": pulse.created_at.isoformat() if pulse.created_at else None,
+    }

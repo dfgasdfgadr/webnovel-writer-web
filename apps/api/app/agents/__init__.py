@@ -11,6 +11,7 @@ from app.agents.polish import PolishAgent
 from app.agents.init import InitAgent
 from app.agents.summary import SummaryAgent
 from app.agents.deconstruct import DeconstructAgent
+from app.agents.reader_pulse import ReaderPulseAgent
 
 __all__ = [
     "BaseAgent", "AgentResult",
@@ -19,4 +20,5 @@ __all__ = [
     "ContextAgent", "WriterAgent", "ReviewAgent", "DataAgent",
     "ArchitectAgent", "ContinuityAgent", "PolishAgent",
     "InitAgent", "SummaryAgent", "DeconstructAgent",
+    "ReaderPulseAgent",
 ]

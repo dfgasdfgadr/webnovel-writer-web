@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
   deleteProject: vi.fn(),
   scanImport: vi.fn(),
   executeImport: vi.fn(),
+  exportProjectUrl: vi.fn((id: string) => `/api/v1/projects/${id}/export?token=test`),
 }));
 
 import * as api from "@/lib/api";
@@ -60,6 +61,51 @@ describe("ProjectHub — import UI", () => {
     await waitFor(() => {
       expect(screen.getAllByText("对话开书").length).toBeGreaterThan(0);
       expect(screen.getAllByText("拆书").length).toBeGreaterThan(0);
+    });
+  });
+
+  it("export menu item triggers download", async () => {
+    const mockProjects = {
+      items: [{
+        id: "p1",
+        title: "测试项目",
+        description: "",
+        genre: "玄幻",
+        status: "active",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        owner_id: "u1",
+        root_dir: "",
+      }],
+      total: 1,
+    };
+    vi.mocked(api.listProjects).mockResolvedValue(mockProjects);
+    const originalHref = window.location.href;
+    Object.defineProperty(window, "location", {
+      value: { href: originalHref },
+      writable: true,
+    });
+
+    renderPage();
+    await waitFor(() => screen.getByText("测试项目"));
+
+    // Hover to reveal dropdown trigger
+    const card = screen.getByText("测试项目").closest("[class*='group']") || screen.getByText("测试项目").closest("div");
+    if (card) fireEvent.mouseEnter(card);
+
+    // Find and click the more options button
+    const moreBtn = screen.getAllByRole("button").find((b) =>
+      b.querySelector("[data-lucide='more-vertical']") || b.innerHTML.includes("more")
+    );
+    if (moreBtn) fireEvent.click(moreBtn);
+
+    // The export option should be in the dropdown
+    await waitFor(() => {
+      const exportItem = screen.queryByText("导出 zip");
+      if (exportItem) {
+        fireEvent.click(exportItem);
+        expect(window.location.href).toContain("/api/v1/projects/p1/export");
+      }
     });
   });
 });

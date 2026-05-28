@@ -26,6 +26,7 @@ def get_workflow_engine() -> WorkflowEngine:
         _engine.register_handler("sim", _handle_sim_action)
         _engine.register_handler("notify", _handle_notify_action)
         _engine.register_handler("git_backup", _handle_git_backup)
+        _engine.register_handler("reader_pulse", _handle_reader_pulse)
 
         # Register built-in git_backup rule (P6-DATA04)
         _engine.rules.append(
@@ -39,6 +40,23 @@ def get_workflow_engine() -> WorkflowEngine:
                         "name": "git_auto_backup",
                         "type": "git_backup",
                         "config": {"auto_init": True},
+                    }
+                ],
+            })
+        )
+
+        # Register built-in reader_pulse rule (P7-RP04) — default disabled
+        _engine.rules.append(
+            _engine._parse_rule({
+                "trigger": "onChapterAccepted",
+                "name": "章节通过后读者模拟",
+                "enabled": False,
+                "condition": {},
+                "actions": [
+                    {
+                        "name": "reader_pulse_sim",
+                        "type": "reader_pulse",
+                        "config": {"mode": "standard"},
                     }
                 ],
             })
@@ -166,6 +184,78 @@ async def _handle_git_backup(config: dict, context: dict) -> dict:
         return result
     except Exception as e:
         return {"action": "git_backup", "status": "error", "error": str(e)}
+
+
+async def _handle_reader_pulse(config: dict, context: dict) -> dict:
+    """Built-in handler for reader pulse simulation.
+
+    Reads chapter content from DB, runs ReaderPulseAgent, and persists results.
+    Returns structured status: completed / skipped / error.
+    """
+    import json as _json
+    from app.database import async_session
+    from app.models.chapter import Chapter as ChapterM
+    from app.models.reader_pulse import ReaderPulseResult
+    from app.agents.reader_pulse import ReaderPulseAgent
+    from app.agents.llm import LLMProvider
+
+    chapter_id = context.get("chapter_id")
+    project_id = context.get("project_id")
+
+    if not chapter_id or not project_id:
+        return {"action": "reader_pulse", "status": "skipped", "reason": "missing context"}
+
+    async with async_session() as db:
+        chapter = await db.get(ChapterM, chapter_id)
+        if not chapter or not chapter.content:
+            return {"action": "reader_pulse", "status": "skipped", "reason": "no_content"}
+
+        prev_summary = ""
+        try:
+            from sqlalchemy import select
+            from app.models import Summary
+            prev_result = await db.execute(
+                select(Summary).where(
+                    Summary.project_id == project_id,
+                    Summary.level == "chapter",
+                ).order_by(Summary.created_at.desc()).limit(1)
+            )
+            prev = prev_result.scalar_one_or_none()
+            if prev:
+                prev_summary = prev.content or ""
+        except Exception:
+            pass
+
+        try:
+            llm = await LLMProvider.for_user(context.get("user_id", ""), db)
+        except Exception:
+            return {"action": "reader_pulse", "status": "error", "error": "LLM provider init failed"}
+
+        agent = ReaderPulseAgent(llm=llm)
+        result = await agent.run(
+            chapter_content=chapter.content,
+            chapter_outline=chapter.outline or "",
+            previous_chapter_summary=prev_summary,
+        )
+
+        if not result.success:
+            return {"action": "reader_pulse", "status": "error", "error": result.error or "unknown"}
+
+        data = result.data
+        db.add(ReaderPulseResult(
+            chapter_id=chapter_id,
+            project_id=project_id,
+            drop_risk=int(data.get("drop_risk", 50)),
+            hook_quality=int(data.get("hook_quality", 50)),
+            pacing_score=int(data.get("pacing_score", 50)),
+            expectation=data.get("expectation", ""),
+            strengths=_json.dumps(data.get("strengths", []), ensure_ascii=False),
+            weaknesses=_json.dumps(data.get("weaknesses", []), ensure_ascii=False),
+            next_chapter_suggestion=data.get("next_chapter_suggestion", ""),
+            overall_verdict=data.get("overall_verdict", ""),
+        ))
+        await db.commit()
+        return {"action": "reader_pulse", "status": "completed", "drop_risk": data.get("drop_risk")}
 
 
 def _persist_workflow_run(project_root: Path, record: dict) -> None:

@@ -653,11 +653,28 @@ async def import_zip_upload(
             raise HTTPException(status_code=500, detail=f"文件复制失败: {e}")
 
         for ch in scan.chapters:
+            # Try to read outline from 大纲/ directory
+            outline = ""
+            outline_dir = Path(project_root) / "大纲"
+            if outline_dir.is_dir():
+                # Try matching patterns: 第N章-标题.md or 第N章.md
+                num = ch["number"]
+                for f in outline_dir.iterdir():
+                    if f.is_file() and f.suffix == ".md":
+                        m = re.match(rf"第{num}章[\-_]?(.*)\.md$", f.name)
+                        if m:
+                            try:
+                                outline = f.read_text(encoding="utf-8")
+                            except Exception:
+                                pass
+                            break
+
             chapter = ChapterModel(
                 project_id=project.id,
                 title=ch["title"],
                 number=ch["number"],
                 content=ch["content"],
+                outline=outline,
                 word_count=calculate_word_count(ch["content"]),
                 status="accepted",
             )
@@ -842,6 +859,81 @@ async def get_project_workflow_history(
     # Return most recent first, limited
     runs.reverse()
     return {"runs": runs[:limit], "total": len(runs)}
+
+
+# --- Prompt Workshop ---
+
+class PromptUpdateRequest(BaseModel):
+    content: str
+
+
+@router.get("/{project_id}/prompts")
+async def list_project_prompts(
+    project_id: str,
+    scope: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List project-level prompt overrides, merged with defaults."""
+    project = await _get_owned_project(project_id, current_user.id, db)
+    from app.prompt_resolver import PromptResolver, DEFAULT_PROMPTS
+
+    resolver = PromptResolver(project_id, db)
+    scopes = list(DEFAULT_PROMPTS.keys())
+    if scope:
+        scopes = [scope]
+
+    prompts = []
+    for s in scopes:
+        for k in DEFAULT_PROMPTS.get(s, {}).keys():
+            content = await resolver.get(s, k)
+            is_overridden = await _has_prompt_override(db, project_id, s, k)
+            prompts.append({"scope": s, "key": k, "content": content, "is_default": not is_overridden})
+    return {"prompts": prompts}
+
+
+@router.put("/{project_id}/prompts/{scope}/{key}")
+async def update_prompt(
+    project_id: str,
+    scope: str,
+    key: str,
+    body: PromptUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_owned_project(project_id, current_user.id, db)
+    from app.prompt_resolver import PromptResolver
+    resolver = PromptResolver(project_id, db)
+    await resolver.set(scope, key, body.content)
+    return {"scope": scope, "key": key, "content": body.content}
+
+
+@router.post("/{project_id}/prompts/{scope}/{key}/reset")
+async def reset_prompt(
+    project_id: str,
+    scope: str,
+    key: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    project = await _get_owned_project(project_id, current_user.id, db)
+    from app.prompt_resolver import PromptResolver
+    resolver = PromptResolver(project_id, db)
+    await resolver.reset(scope, key)
+    content = await resolver.get(scope, key)
+    return {"scope": scope, "key": key, "content": content, "reset": True}
+
+
+async def _has_prompt_override(db: AsyncSession, project_id: str, scope: str, key: str) -> bool:
+    from app.models.project_prompt import ProjectPrompt
+    result = await db.execute(
+        select(ProjectPrompt).where(
+            ProjectPrompt.project_id == project_id,
+            ProjectPrompt.scope == scope,
+            ProjectPrompt.key == key,
+        )
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def _get_owned_project(project_id: str, user_id: str, db: AsyncSession) -> Project:

@@ -11,6 +11,8 @@ from app.models.search_doc import SearchDoc
 from app.models.disambiguation import DisambiguationItem
 from app.models.summary import Summary
 from app.models.review_metric import ReviewMetric
+from app.models.reader_pulse import ReaderPulseResult
+from app.models.project_prompt import ProjectPrompt
 
 __all__ = [
     "User", "Project", "Chapter",
@@ -18,4 +20,5 @@ __all__ = [
     "AgentRun", "ChapterCommit", "ReviewIssue",
     "UserLlmSettings", "SimulationJob", "SearchDoc",
     "DisambiguationItem", "Summary", "ReviewMetric",
+    "ReaderPulseResult", "ProjectPrompt",
 ]

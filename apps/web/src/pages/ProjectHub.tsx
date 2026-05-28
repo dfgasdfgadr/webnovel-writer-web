@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen, Sparkles, FileArchive, Scissors } from "lucide-react";
+import { BookOpen, Plus, Loader2, MoreVertical, Archive, Trash2, Edit3, FolderOpen, Sparkles, FileArchive, Scissors, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -487,6 +487,12 @@ export function ProjectHub() {
                       }}>
                         <Edit3 className="size-4 mr-2" />
                         编辑
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        window.location.href = api.exportProjectUrl(project.id);
+                      }}>
+                        <Download className="size-4 mr-2" />
+                        导出 zip
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() =>
                         archiveMut.mutate({

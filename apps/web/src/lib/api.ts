@@ -220,6 +220,11 @@ export function scanImport(sourcePath: string) {
   });
 }
 
+export function exportProjectUrl(projectId: string): string {
+  const token = getToken();
+  return `${BASE_URL}/projects/${projectId}/export?token=${token || ""}`;
+}
+
 export function executeImport(sourcePath: string, title?: string) {
   return request<ProjectPublic>("/projects/import", {
     method: "POST",
@@ -782,4 +787,57 @@ export interface WorkflowRun {
 export function getWorkflowHistory(projectId: string, limit?: number) {
   const params = limit ? `?limit=${limit}` : "";
   return request<{ runs: WorkflowRun[]; total: number }>(`/projects/${projectId}/workflow-history${params}`);
+}
+
+// ---- Reader Pulse ----
+export interface ReaderPulsePublic {
+  id: string;
+  chapter_id: string;
+  project_id: string;
+  drop_risk: number;
+  hook_quality: number;
+  pacing_score: number;
+  expectation: string;
+  strengths: string[];
+  weaknesses: string[];
+  next_chapter_suggestion: string;
+  overall_verdict: string;
+  created_at: string;
+}
+
+export function getReaderPulse(chapterId: string) {
+  return request<ReaderPulsePublic[]>(`/agents/reader-pulse/${chapterId}`);
+}
+
+export function runReaderPulse(chapterId: string) {
+  return request<ReaderPulsePublic>(`/agents/reader-pulse/${chapterId}`, {
+    method: "POST",
+  });
+}
+
+// ---- Prompt Workshop ----
+export interface PromptEntry {
+  scope: string;
+  key: string;
+  content: string;
+  is_default: boolean;
+}
+
+export function getProjectPrompts(projectId: string, scope?: string) {
+  const params = scope ? `?scope=${scope}` : "";
+  return request<{ prompts: PromptEntry[] }>(`/projects/${projectId}/prompts${params}`);
+}
+
+export function updateProjectPrompt(projectId: string, scope: string, key: string, content: string) {
+  return request<{ scope: string; key: string; content: string }>(
+    `/projects/${projectId}/prompts/${scope}/${key}`,
+    { method: "PUT", body: JSON.stringify({ content }) },
+  );
+}
+
+export function resetProjectPrompt(projectId: string, scope: string, key: string) {
+  return request<{ scope: string; key: string; content: string; reset: boolean }>(
+    `/projects/${projectId}/prompts/${scope}/${key}/reset`,
+    { method: "POST" },
+  );
 }

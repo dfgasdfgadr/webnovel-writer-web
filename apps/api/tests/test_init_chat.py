@@ -49,6 +49,7 @@ class TestInitChatAgent:
         state = {
             "title": "书", "genre": "玄幻", "hook": "h", "protagonist_name": "p",
             "world_building": "w", "power_system": "p", "golden_finger": "g",
+            "constraints": ["单女主"],
         }
         missing = agent._missing_fields(state)
         assert missing == []
@@ -66,10 +67,34 @@ class TestInitChatAgent:
             "title": "测试书", "genre": "玄幻", "hook": "逆袭之路",
             "protagonist_name": "叶凡", "world_building": "修仙世界",
             "power_system": "灵力修炼", "golden_finger": "时间回溯",
+            "constraints": ["单女主", "无系统"],
         })
         result = await agent.process_message(full_msg)
         assert result["status"] == "complete"
         assert len(result["schemes"]) == 3
+
+    @pytest.mark.asyncio
+    async def test_process_message_extracts_natural_language_answer(self):
+        """Natural language answers should be mapped to the first missing field."""
+        agent = self._make_agent()
+        # First message: provide title as JSON
+        result = await agent.process_message(json.dumps({"title": "斗破苍穹"}))
+        assert result["status"] == "asking"
+        assert "genre" in result.get("missing_fields", [])
+        # Second message: natural language for genre
+        result2 = await agent.process_message("玄幻")
+        assert result2["status"] == "asking"
+        # Third message: provide remaining required fields
+        result3 = await agent.process_message(json.dumps({
+            "hook": "逆天改命", "protagonist_name": "萧炎",
+        }))
+        assert result3["status"] == "asking"
+        # Continue with secondary fields
+        result4 = await agent.process_message(json.dumps({
+            "world_building": "斗气大陆", "power_system": "斗气修炼",
+            "golden_finger": "药老", "constraints": ["热血", "升级流"],
+        }))
+        assert result4["status"] == "complete"
 
 
 class TestInitChatAPI:

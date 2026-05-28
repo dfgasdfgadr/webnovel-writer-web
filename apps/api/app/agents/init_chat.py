@@ -78,9 +78,31 @@ class InitChatAgent(BaseAgent):
         required = ["title", "genre", "hook", "protagonist_name"]
         missing = [k for k in required if not state.get(k)]
         if not missing:
-            secondary = ["world_building", "power_system", "golden_finger"]
+            secondary = ["world_building", "power_system", "golden_finger", "constraints"]
             missing = [k for k in secondary if not state.get(k)]
         return missing
+
+    def _extract_answer(self, user_message: str, missing: list[str]) -> dict:
+        """Try to extract field value from natural language answer.
+
+        When the user replies in natural language (not JSON), we assume
+        they are answering the most recent question about the first missing field.
+        """
+        result = {}
+        if not missing or not user_message.strip():
+            return result
+        # JSON answers are already handled by _collect_state
+        try:
+            json.loads(user_message)
+            return result
+        except json.JSONDecodeError:
+            pass
+        first = missing[0]
+        if first == "constraints":
+            result[first] = [user_message.strip()]
+        else:
+            result[first] = user_message.strip()
+        return result
 
     async def process_message(self, user_message: str) -> dict:
         """Process a user message and return the next step in the conversation."""
@@ -89,8 +111,19 @@ class InitChatAgent(BaseAgent):
         state = self._collect_state(self.conversation)
         missing = self._missing_fields(state)
 
-        if not missing and not state.get("constraints"):
-            # Generate creative schemes
+        # Extract from natural language if needed
+        nl = self._extract_answer(user_message, missing)
+        if nl:
+            for key, value in nl.items():
+                state[key] = value
+                # Persist as structured JSON so future _collect_state sees it
+                self.conversation.append(
+                    {"role": "user", "content": json.dumps({key: value}, ensure_ascii=False)}
+                )
+            missing = self._missing_fields(state)
+
+        if not missing:
+            # All fields collected — generate creative schemes
             return await self._generate_schemes(state)
 
         if not self.llm:
@@ -124,6 +157,7 @@ class InitChatAgent(BaseAgent):
             "world_building": "简单描述一下你故事的世界背景",
             "power_system": "你的故事中有怎样的力量体系或能力设定？",
             "golden_finger": "主角有什么特殊的金手指或优势？",
+            "constraints": "你对这本书有什么创作上的限制或偏好？（比如：单女主、无系统、黑暗向）",
         }
         question = prompts.get(missing[0], f"请提供更多关于 {missing[0]} 的信息")
         return {
