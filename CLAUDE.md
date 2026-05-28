@@ -2,7 +2,7 @@
 
 ## 项目
 
-自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 7**（Phase 0–6 已完成）。
+自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 8**（Phase 0–7 已完成）。
 
 ## 新 Phase 启动顺序
 
@@ -13,7 +13,7 @@
 3. `.claude-instructions.md` — 全局强制规则（含阶段交接文档 + 执行简报流程）
 4. `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 对应 Phase 章节与验收标准
 
-**当前 Phase 7 必读**：待 PM 签发 `PHASE7_EXECUTION_BRIEF.md` → `PHASE6_HANDOFF.md`
+**当前 Phase 8 必读**：待 PM 签发 `PHASE8_EXECUTION_BRIEF.md` → `PHASE7_HANDOFF.md`
 
 生成本阶段 handoff 时参考：`docs/handoffs/HANDOFF_TEMPLATE.md`
 

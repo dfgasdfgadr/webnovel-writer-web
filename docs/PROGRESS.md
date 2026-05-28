@@ -13,7 +13,17 @@
 | 4 | 生态与自动化 | DONE | [PHASE4_HANDOFF.md](handoffs/PHASE4_HANDOFF.md) |
 | 5 | 作者闭环与知识工作台 | DONE | [PHASE5_HANDOFF.md](handoffs/PHASE5_HANDOFF.md) |
 | 6 | 开书到章节交付闭环 | DONE | [PHASE6_HANDOFF.md](handoffs/PHASE6_HANDOFF.md) |
+| 7 | 读者视角质量系统 | DONE | [PHASE7_HANDOFF.md](handoffs/PHASE7_HANDOFF.md) |
 
+## PM 监控（Phase 7 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-28 | 已签发 | PM 签发 PHASE7_EXECUTION_BRIEF |
+| 2026-05-28 | 执行中 | Track 0 Gate 修复 + Track 1-4 开发 |
+| 2026-05-28 | **DONE** | 全部 Track 完成；305 tests 全绿；PHASE7_HANDOFF 已生成；**待 PM 浏览器验收** |
+
+---
 ## PM 监控（Phase 6 — 已完成）
 
 | 时间 | 状态 | 备注 |
@@ -87,6 +97,16 @@
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
 ## Claude 最新回报
+
+### 2026-05-28：Phase 7 完成 — 读者视角质量系统
+
+- **Track 0 Gate 修复**：BUG-P6-01 InitChat 自然语言字段提取+constraints 闸门 / BUG-P6-02 导出 zip UI / P7-G03 outline 导入 / 1280px 响应式 / Workflow 全链路
+- **Track 1 ReaderPulseSim**：ReaderPulseAgent + ReaderPulseResult 模型 + GET/POST API + Workflow handler（默认禁用）+ 7 单测
+- **Track 2 ReviewPage 聚合**：读者反馈面板（弃读风险/钩子/节奏评分+弱点）+ weakness→axis 映射表 + 一键润色
+- **Track 3 改稿闭环**：Weakness→Polish axis 映射 + 一键修订按钮
+- **Track 4 Prompt 工坊**：ProjectPrompt 模型 + PromptResolver + CRUD API + PromptWorkshop UI（编辑/保存/恢复）+ 3 单测
+- **测试**：172 API + 133 Web = **305 tests ALL PASS**（新增 17 用例）
+- **文档**：PHASE7_HANDOFF.md 已生成，Brief STATUS=DONE，CLAUDE.md → Phase 8
 
 ### 2026-05-27：Phase 6 完成 — 开书到章节交付闭环
 
