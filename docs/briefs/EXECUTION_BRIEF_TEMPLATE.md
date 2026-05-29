@@ -73,12 +73,3 @@
 
 ---
 
-## 7. Claude Code 启动命令（PM 执行）
-
-```bash
-cd c:\Users\flat-mirror\Desktop\mirofish
-# 确保 .claude-run-prompt.txt 指向本简报
-claude --dangerously-skip-permissions --permission-mode bypassPermissions --effort high -p "$(Get-Content docs/briefs/PHASE{N}_EXECUTION_BRIEF.md -Raw)" --output-format text
-```
-
-或使用 `.claude-run-prompt.txt` 引导读本文档。

@@ -8,10 +8,9 @@
 
 > **只读上一阶段交接文档**，更早的 handoff 为归档，无需重复阅读。
 
-1. **`docs/briefs/PHASE{N}_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
-2. **`docs/handoffs/PHASE{N-1}_HANDOFF.md`** — **仅上一阶段**交接文档（Phase 4 即 `PHASE3_HANDOFF.md`）
+1. `**docs/briefs/PHASE{N}_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
+2. `**docs/handoffs/PHASE{N-1}_HANDOFF.md**` — **仅上一阶段**交接文档（Phase 4 即 `PHASE3_HANDOFF.md`）
 3. `.claude-instructions.md` — 全局强制规则（含阶段交接文档 + 执行简报流程）
-4. `.cursor/plans/ai网文写作系统_94b0bbee.plan.md` — 对应 Phase 章节与验收标准
 
 **当前 Phase 9 必读**：待 PM 签发 `PHASE9_EXECUTION_BRIEF.md` → `PHASE8_HANDOFF.md`
 
@@ -26,6 +25,7 @@
 ## 前端 UI 规范
 
 开发前端时遵循：
+
 - `.cursor/skills/frontend-design/` — 美学与交互质量
 - `/ui-ux-pro-max` — 配色/字体/UX 决策
 - shadcn skill + MCP — 组件安装与组合
@@ -49,7 +49,7 @@ docker/
 
 ## 单元测试（强制）
 
-**每个功能必须有单元测试。** 规范见 [`docs/TESTING.md`](docs/TESTING.md)。
+**每个功能必须有单元测试。** 规范见 `[docs/TESTING.md](docs/TESTING.md)`。
 
 - 运行：`pnpm test`（全量）、`pnpm test:api`、`pnpm test:web`
 - 新功能 / bug 修复：测试与实现同 commit
