@@ -5,7 +5,7 @@ import {
   Send, Loader2, ArrowLeft, BookOpen, AlertTriangle, Check,
   Sparkles, Lightbulb, Users, Globe, Timer, ArrowRight,
   ShieldAlert, BookMarked, ChevronRight, Wand2, FileText,
-  PenTool, CheckCircle2, AlertCircle,
+  PenTool, CheckCircle2, AlertCircle, Zap, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,14 @@ type FoundryStep =
 
 interface SampleInput {
   id: number;
+  content: string;
+}
+
+type FoundryMode = "quick" | "representative" | "fullbook";
+
+interface ChapterGroupInput {
+  id: number;
+  label: string;
   content: string;
 }
 
@@ -94,10 +102,17 @@ export function StoryFoundryPage() {
   const [composeResult, setComposeResult] = useState<api.FoundryComposeResponse | null>(null);
   const [customNotes, setCustomNotes] = useState("");
   const [fallbackNotice, setFallbackNotice] = useState(false);
+  const [mode, setMode] = useState<FoundryMode>("quick");
+  const [chapterGroups, setChapterGroups] = useState<ChapterGroupInput[]>([{ id: 1, label: "", content: "" }]);
 
   const deconstructMut = useMutation({
     mutationFn: api.foundryDeconstruct,
     onSuccess: (data) => {
+      if (data.status === "deferred") {
+        toast.info(data.message || "该模式暂未开放");
+        setStep("input");
+        return;
+      }
       setDeconstruction(data.deconstruction);
       setFallbackNotice(data.fallback);
       setStep("deconstruction");
@@ -172,6 +187,18 @@ export function StoryFoundryPage() {
     setSamples((prev) => prev.map((s) => (s.id === id ? { ...s, content } : s)));
   }, []);
 
+  const addChapterGroup = useCallback(() => {
+    setChapterGroups((prev) => [...prev, { id: prev.length + 1, label: "", content: "" }]);
+  }, []);
+
+  const removeChapterGroup = useCallback((id: number) => {
+    setChapterGroups((prev) => prev.filter((g) => g.id !== id));
+  }, []);
+
+  const updateChapterGroup = useCallback((id: number, field: "label" | "content", value: string) => {
+    setChapterGroups((prev) => prev.map((g) => (g.id === id ? { ...g, [field]: value } : g)));
+  }, []);
+
   const fetchQuestions = useCallback(
     (decon: FoundryDeconstruction) => {
       questionsMut.mutate({ deconstruction: decon });
@@ -180,20 +207,49 @@ export function StoryFoundryPage() {
   );
 
   const startDeconstruct = useCallback(() => {
-    const nonEmpty = samples.map((s) => s.content.trim()).filter(Boolean);
     if (!bookTitle.trim()) {
       toast.error("请输入参考书书名");
       return;
     }
-    if (nonEmpty.length === 0) {
-      toast.error("请至少粘贴一段样章");
+
+    if (mode === "fullbook") {
+      toast.info("Full-book RAG 模式将在下一阶段开放");
       return;
     }
+
     setStep("deconstructing");
     setDeconstruction(null);
     setFallbackNotice(false);
-    deconstructMut.mutate({ book_title: bookTitle, sample_chapters: nonEmpty });
-  }, [bookTitle, samples, deconstructMut]);
+
+    if (mode === "quick") {
+      const nonEmpty = samples.map((s) => s.content.trim()).filter(Boolean);
+      if (nonEmpty.length === 0) {
+        toast.error("请至少粘贴一段样章");
+        setStep("input");
+        return;
+      }
+      deconstructMut.mutate({
+        book_title: bookTitle,
+        sample_chapters: nonEmpty,
+        mode: "quick",
+      });
+    } else if (mode === "representative") {
+      const groups = chapterGroups
+        .map((g) => ({ label: g.label.trim(), content: g.content.trim() }))
+        .filter((g) => g.content);
+      if (groups.length === 0) {
+        toast.error("请至少输入一组代表章节");
+        setStep("input");
+        return;
+      }
+      deconstructMut.mutate({
+        book_title: bookTitle,
+        sample_chapters: [],
+        mode: "representative",
+        chapter_groups: groups,
+      });
+    }
+  }, [bookTitle, mode, samples, chapterGroups, deconstructMut]);
 
   const handleSelectOption = useCallback((questionId: string, optionId: string) => {
     setSelections((prev) => ({ ...prev, [questionId]: optionId }));
@@ -271,6 +327,46 @@ export function StoryFoundryPage() {
         {/* ========== INPUT STEP ========== */}
         {step === "input" && (
           <div className="max-w-xl mx-auto space-y-6">
+            {/* Mode Selection */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Card
+                className={`cursor-pointer transition-all ${mode === "quick" ? "ring-2 ring-primary" : "hover:border-primary/50"}`}
+                onClick={() => setMode("quick")}
+              >
+                <CardContent className="p-4 space-y-2">
+                  <Zap className="size-5 text-amber-500" />
+                  <h3 className="font-medium text-sm">快速模式</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    1-3 章样章快拆
+                  </p>
+                </CardContent>
+              </Card>
+              <Card
+                className={`cursor-pointer transition-all ${mode === "representative" ? "ring-2 ring-primary" : "hover:border-primary/50"}`}
+                onClick={() => setMode("representative")}
+              >
+                <CardContent className="p-4 space-y-2">
+                  <Layers className="size-5 text-blue-500" />
+                  <h3 className="font-medium text-sm">代表章节</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    多组代表章节拆解
+                  </p>
+                </CardContent>
+              </Card>
+              <Card
+                className={`cursor-pointer transition-all ${mode === "fullbook" ? "ring-2 ring-primary" : "hover:border-primary/50"}`}
+                onClick={() => setMode("fullbook")}
+              >
+                <CardContent className="p-4 space-y-2">
+                  <BookOpen className="size-5 text-emerald-500" />
+                  <h3 className="font-medium text-sm">全书拆解</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Full-book RAG（即将支持）
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -290,48 +386,111 @@ export function StoryFoundryPage() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BookMarked className="size-4 text-primary" />
-                  样章文本
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  粘贴 1-3 段样章（每段约 500-3000 字），AI 将分析其结构模式并生成策略选择题。
-                  <span className="text-destructive font-medium">不要粘贴整本书。只需关键片段。红线下不复制原作角色、地名和具体情节。</span>
-                </p>
-                {samples.map((sample, idx) => (
-                  <div key={sample.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-medium">样章 {idx + 1}</label>
-                      {samples.length > 1 && (
-                        <Button variant="ghost" size="sm" onClick={() => removeSample(sample.id)}>
-                          删除
-                        </Button>
-                      )}
+            {/* Quick Mode: Sample Chapters */}
+            {mode === "quick" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <BookMarked className="size-4 text-primary" />
+                    样章文本
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    粘贴 1-3 段样章（每段约 500-3000 字），AI 将分析其结构模式并生成策略选择题。
+                    <span className="text-destructive font-medium">不要粘贴整本书。只需关键片段。红线下不复制原作角色、地名和具体情节。</span>
+                  </p>
+                  {samples.map((sample, idx) => (
+                    <div key={sample.id} className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">样章 {idx + 1}</label>
+                        {samples.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeSample(sample.id)}>
+                            删除
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        value={sample.content}
+                        onChange={(e) => updateSample(sample.id, e.target.value)}
+                        placeholder={`粘贴第 ${idx + 1} 段样章文本...`}
+                        rows={6}
+                      />
                     </div>
-                    <Textarea
-                      value={sample.content}
-                      onChange={(e) => updateSample(sample.id, e.target.value)}
-                      placeholder={`粘贴第 ${idx + 1} 段样章文本...`}
-                      rows={6}
-                    />
-                  </div>
-                ))}
-                {samples.length < 3 && (
-                  <Button variant="outline" onClick={addSample} className="w-full">
-                    + 添加样章
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
+                  ))}
+                  {samples.length < 3 && (
+                    <Button variant="outline" onClick={addSample} className="w-full">
+                      + 添加样章
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
-            <Button onClick={startDeconstruct} className="w-full" disabled={!bookTitle.trim()}>
-              <Sparkles className="size-4 mr-1" />
-              开始分析并生成选择题
-            </Button>
+            {/* Representative Mode: Chapter Groups */}
+            {mode === "representative" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Layers className="size-4 text-primary" />
+                    代表章节组
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    提供多组代表章节（如黄金三章、高潮章节、结局章节等），AI 将综合分析全书模式。
+                    <span className="text-destructive font-medium">不要粘贴整本书。红线下不复制原作角色、地名和具体情节。</span>
+                  </p>
+                  {chapterGroups.map((group, idx) => (
+                    <div key={group.id} className="space-y-2 border rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium">章节组 {idx + 1}</label>
+                        {chapterGroups.length > 1 && (
+                          <Button variant="ghost" size="sm" onClick={() => removeChapterGroup(group.id)}>
+                            删除
+                          </Button>
+                        )}
+                      </div>
+                      <Input
+                        value={group.label}
+                        onChange={(e) => updateChapterGroup(group.id, "label", e.target.value)}
+                        placeholder="章节描述，如：黄金三章 / 高潮章节 / 结局章节"
+                      />
+                      <Textarea
+                        value={group.content}
+                        onChange={(e) => updateChapterGroup(group.id, "content", e.target.value)}
+                        placeholder={`粘贴第 ${idx + 1} 组章节文本...`}
+                        rows={5}
+                      />
+                    </div>
+                  ))}
+                  <Button variant="outline" onClick={addChapterGroup} className="w-full">
+                    + 添加章节组
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Full-book Mode: Placeholder */}
+            {mode === "fullbook" && (
+              <Card className="border-dashed">
+                <CardContent className="p-6 text-center space-y-3">
+                  <BookOpen className="size-8 mx-auto text-muted-foreground" />
+                  <h3 className="font-medium">Full-book RAG 模式即将开放</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    该模式将在下一阶段支持整本书上传和自动索引，提供更全面的拆书分析。
+                    当前请使用<span className="text-primary font-medium">快速模式</span>或<span className="text-primary font-medium">代表章节</span>模式。
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {mode !== "fullbook" && (
+              <Button onClick={startDeconstruct} className="w-full" disabled={!bookTitle.trim()}>
+                <Sparkles className="size-4 mr-1" />
+                开始分析并生成选择题
+              </Button>
+            )}
 
             <div className="flex gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">

@@ -854,9 +854,16 @@ export interface FoundryDeconstruction {
   red_flags: string[];
 }
 
+export interface FoundryChapterGroup {
+  label: string;
+  content: string;
+}
+
 export interface FoundryDeconstructRequest {
   book_title: string;
   sample_chapters: string[];
+  mode?: "quick" | "representative" | "fullbook";
+  chapter_groups?: FoundryChapterGroup[];
 }
 
 export interface FoundryDeconstructResponse {

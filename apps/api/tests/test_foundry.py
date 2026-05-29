@@ -323,3 +323,57 @@ class TestFoundryProjectCreate:
         assert resp.status_code == 201
         data = resp.json()
         assert data["title"] == "Normal Project"
+
+
+class TestFoundryModeDispatch:
+    async def test_foundry_deconstruct_quick_default(self, async_client: AsyncClient, auth_headers: dict):
+        """Default mode is quick when mode field is omitted (backward compat)."""
+        with patch("app.agents.llm.LLMProvider.chat", return_value=MockLLMResponse(mock_deconstruct_json())):
+            resp = await async_client.post(
+                "/api/v1/agents/foundry/deconstruct",
+                json={"book_title": "测试书", "sample_chapters": ["第一章..."]},
+                headers=auth_headers,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "done"
+        assert "deconstruction" in data
+
+    async def test_foundry_deconstruct_representative(self, async_client: AsyncClient, auth_headers: dict):
+        """Representative mode merges chapter groups and returns deconstruction."""
+        with patch("app.agents.llm.LLMProvider.chat", return_value=MockLLMResponse(mock_deconstruct_json())):
+            resp = await async_client.post(
+                "/api/v1/agents/foundry/deconstruct",
+                json={
+                    "book_title": "测试书",
+                    "mode": "representative",
+                    "chapter_groups": [
+                        {"label": "黄金三章", "content": "前三章内容..."},
+                        {"label": "高潮章节", "content": "高潮内容..."},
+                    ],
+                },
+                headers=auth_headers,
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "done"
+        assert "deconstruction" in data
+        decon = data["deconstruction"]
+        assert "golden_chapters" in decon
+
+    async def test_foundry_deconstruct_fullbook_placeholder(self, async_client: AsyncClient, auth_headers: dict):
+        """Full-book mode returns deferred placeholder without calling LLM."""
+        resp = await async_client.post(
+            "/api/v1/agents/foundry/deconstruct",
+            json={
+                "book_title": "测试书",
+                "mode": "fullbook",
+                "sample_chapters": [],
+            },
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "deferred"
+        assert "Full-book" in data["message"] or "下一阶段" in data["message"]
+        assert data["deconstruction"] is None

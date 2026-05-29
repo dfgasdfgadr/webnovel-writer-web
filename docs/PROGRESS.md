@@ -16,6 +16,12 @@
 | 7 | 读者视角质量系统 | DONE | [PHASE7_HANDOFF.md](handoffs/PHASE7_HANDOFF.md) |
 | 8 | Story Foundry 智能造书 | DONE | [PHASE8_HANDOFF.md](handoffs/PHASE8_HANDOFF.md) |
 
+### 新 Phase 体系
+
+| Phase | 名称 | 状态 | 交接文档 |
+|-------|------|------|----------|
+| 1 | Story Foundry 三档拆书入口 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
+
 ## PM 监控（Phase 7 — 已完成）
 
 | 时间 | 状态 | 备注 |
@@ -107,7 +113,23 @@
 
 ---
 
+## PM 监控（新 Phase 1 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-29 | 已签发 | PM 签发新 PHASE1_EXECUTION_BRIEF（Story Foundry 三档拆书） |
+| 2026-05-29 | **DONE** | 后端 API mode 分流 + 前端三档 UI + 152 tests 全绿；PHASE1_HANDOFF 已生成 |
+
+---
+
 ## Claude 最新回报
+
+### 2026-05-29：新 Phase 1 完成 — Story Foundry 三档拆书入口
+
+- **后端 API mode 分流**：`FoundryDeconstructRequest` 增加 `mode`（quick/representative/fullbook）和 `chapter_groups` 字段；`foundry_deconstruct` 路由按 mode 分流：quick 走现有逻辑、representative 合并 chapter_groups 后调用 DeconstructAgent、fullbook 返回 deferred 占位
+- **前端三档模式 UI**：StoryFoundryPage 顶部增加模式选择卡片网格；按模式切换输入表单（quick：1-3 段样章；representative：多组章节 label+content；fullbook：占位提示卡片）
+- **测试**：后端 12（新增 3）+ 前端 140（新增 3）= **152 tests ALL PASS**
+- **文档**：PHASE1_HANDOFF.md 已生成，Brief STATUS=DONE，PROGRESS.md 已更新
 
 ### 2026-05-29：Phase 8 完成 — Story Foundry 智能造书
 

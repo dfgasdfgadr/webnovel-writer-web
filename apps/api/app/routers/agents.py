@@ -1351,6 +1351,8 @@ async def run_reader_pulse(
 class FoundryDeconstructRequest(BaseModel):
     book_title: str
     sample_chapters: list[str] = []
+    mode: str = "quick"
+    chapter_groups: list[dict] = []
 
 
 class FoundryQuestionsRequest(BaseModel):
@@ -1380,8 +1382,28 @@ async def foundry_deconstruct(
     except Exception:
         llm = None
 
+    # Mode dispatch
+    mode = body.mode if body.mode in ("quick", "representative", "fullbook") else "quick"
+
+    if mode == "fullbook":
+        return {
+            "status": "deferred",
+            "message": "Full-book RAG 流程将在下一阶段支持",
+            "deconstruction": None,
+        }
+
+    # Prepare sample_chapters for the agent
+    if mode == "representative" and body.chapter_groups:
+        sample_chapters = [
+            f"【章节组：{g.get('label', '未命名')}\n{g.get('content', '')}"
+            for g in body.chapter_groups
+            if g.get("content", "").strip()
+        ]
+    else:
+        sample_chapters = body.sample_chapters
+
     agent = DeconstructAgent(llm=llm) if llm else DeconstructAgent()
-    result = await agent.run(book_title=body.book_title, sample_chapters=body.sample_chapters)
+    result = await agent.run(book_title=body.book_title, sample_chapters=sample_chapters)
 
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error or "Deconstruct failed")

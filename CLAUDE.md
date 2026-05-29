@@ -2,17 +2,17 @@
 
 ## 项目
 
-自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：**Phase 9**（Phase 0–8 已完成）。
+自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：新**Phase2**（旧：Phase 0–8 + 新 Phase 1 已完成）。
 
 ## 新 Phase 启动顺序
 
 > **只读上一阶段交接文档**，更早的 handoff 为归档，无需重复阅读。
 
 1. `**docs/briefs/PHASE{N}_EXECUTION_BRIEF.md`** — 本阶段执行简报（PM 签发，先读此文件）
-2. `**docs/handoffs/PHASE{N-1}_HANDOFF.md**` — **仅上一阶段**交接文档（Phase 4 即 `PHASE3_HANDOFF.md`）
+2. `**docs/handoffs/PHASE{N-1}_HANDOFF.md`** — **仅上一阶段**交接文档（Phase 4 即 `PHASE3_HANDOFF.md`）
 3. `.claude-instructions.md` — 全局强制规则（含阶段交接文档 + 执行简报流程）
 
-**当前 Phase 9 必读**：待 PM 签发 `PHASE9_EXECUTION_BRIEF.md` → `PHASE8_HANDOFF.md`
+**当前新Phase 1必读**：待 PM 签发 `PHASE1_EXECUTION_BRIEF.md` → `PHASE8_HANDOFF.md`
 
 生成本阶段 handoff 时参考：`docs/handoffs/HANDOFF_TEMPLATE.md`
 

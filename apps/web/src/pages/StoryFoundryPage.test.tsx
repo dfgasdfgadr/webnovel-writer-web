@@ -167,4 +167,69 @@ describe("StoryFoundryPage", () => {
       expect(screen.getAllByText("可迁移模式").length).toBeGreaterThanOrEqual(1);
     });
   });
+
+  it("renders three mode selection cards", () => {
+    renderPage();
+    expect(screen.getAllByText("快速模式")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("代表章节")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("全书拆解")[0]).toBeInTheDocument();
+  });
+
+  it("switches to representative mode and submits chapter groups", async () => {
+    mockFoundryDeconstruct.mockResolvedValue({
+      status: "done",
+      deconstruction: mockDeconstruction,
+      fallback: false,
+    });
+    mockFoundryQuestions.mockResolvedValue({
+      question_sets: [],
+      fallback: false,
+    });
+
+    renderPage();
+
+    // Switch to representative mode
+    fireEvent.click(screen.getAllByText("代表章节")[0]);
+
+    // Fill book title
+    fireEvent.change(screen.getAllByPlaceholderText("输入参考书的名称")[0], {
+      target: { value: "测试书" },
+    });
+
+    // Fill chapter group label and content
+    const labelInput = screen.getAllByPlaceholderText("章节描述，如：黄金三章 / 高潮章节 / 结局章节")[0];
+    fireEvent.change(labelInput, { target: { value: "黄金三章" } });
+
+    const contentTextarea = screen.getAllByPlaceholderText("粘贴第 1 组章节文本...")[0];
+    fireEvent.change(contentTextarea, { target: { value: "章节内容..." } });
+
+    // Submit
+    const analyzeButtons = screen.getAllByRole("button", { name: /开始分析并生成选择题/ });
+    fireEvent.click(analyzeButtons[0]);
+
+    // Verify deconstruct API was called and UI transitions
+    await waitFor(() => {
+      expect(mockFoundryDeconstruct).toHaveBeenCalledTimes(1);
+    });
+
+    const firstCall = mockFoundryDeconstruct.mock.calls[0][0];
+    expect(firstCall).toMatchObject({
+      book_title: "测试书",
+      mode: "representative",
+      chapter_groups: [{ label: "黄金三章", content: "章节内容..." }],
+    });
+  });
+
+  it("shows placeholder in fullbook mode without calling API", async () => {
+    renderPage();
+
+    // Switch to fullbook mode
+    fireEvent.click(screen.getAllByText("全书拆解")[0]);
+
+    // Should show placeholder text
+    expect(screen.getAllByText(/Full-book RAG 模式即将开放/)[0]).toBeInTheDocument();
+
+    // Mock should not be called
+    expect(mockFoundryDeconstruct).not.toHaveBeenCalled();
+  });
 });
