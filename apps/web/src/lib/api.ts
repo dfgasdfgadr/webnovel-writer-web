@@ -38,6 +38,11 @@ import type {
   EntityUpdate,
   RelationshipPublic,
   RelationshipCreate,
+  ReferenceCorpusPublic,
+  ReferenceCorpusDetail,
+  ReferenceCorpusList,
+  ReferenceSearchResult,
+  ReferenceSearchResponse,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -81,6 +86,11 @@ export type {
   EntityUpdate,
   RelationshipPublic,
   RelationshipCreate,
+  ReferenceCorpusPublic,
+  ReferenceCorpusDetail,
+  ReferenceCorpusList,
+  ReferenceSearchResult,
+  ReferenceSearchResponse,
 };
 
 const BASE_URL = "/api/v1";
@@ -942,4 +952,68 @@ export function foundryCompose(data: FoundryComposeRequest) {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+// ---- Reference Corpus ----
+
+export function listReferenceCorpora() {
+  return request<ReferenceCorpusList>("/reference-corpora");
+}
+
+export function createReferenceCorpus(data: {
+  title: string;
+  author?: string;
+  description?: string;
+  content: string;
+}) {
+  return request<ReferenceCorpusPublic>("/reference-corpora", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function uploadReferenceCorpus(
+  file: File,
+  title?: string,
+  author?: string,
+  description?: string,
+) {
+  const token = getToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  if (title) formData.append("title", title);
+  if (author) formData.append("author", author);
+  if (description) formData.append("description", description);
+
+  return fetch(`${BASE_URL}/reference-corpora/upload`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  }).then(async (res) => {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Upload failed");
+    return data as ReferenceCorpusPublic;
+  });
+}
+
+export function getReferenceCorpus(corpusId: string) {
+  return request<ReferenceCorpusDetail>(`/reference-corpora/${corpusId}`);
+}
+
+export function deleteReferenceCorpus(corpusId: string) {
+  return request<void>(`/reference-corpora/${corpusId}`, { method: "DELETE" });
+}
+
+export function searchReferenceCorpus(
+  corpusId: string,
+  query: string,
+  topK: number = 10,
+) {
+  return request<ReferenceSearchResponse>(
+    `/reference-corpora/${corpusId}/search`,
+    {
+      method: "POST",
+      body: JSON.stringify({ query, top_k: topK }),
+    },
+  );
 }

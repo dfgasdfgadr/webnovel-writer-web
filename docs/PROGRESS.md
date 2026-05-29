@@ -21,6 +21,16 @@
 | Phase | 名称 | 状态 | 交接文档 |
 |-------|------|------|----------|
 | 1 | Story Foundry 三档拆书入口 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
+| 2 | Reference Corpus 导入与索引 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
+
+## PM 监控（新 Phase 2 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-29 | 已签发 | PM 签发新 PHASE2_EXECUTION_BRIEF（Reference Corpus 导入、章节切分与 BM25 索引） |
+| 2026-05-29 | **DONE** | ReferenceCorpus/Chapter/Chunk 模型 + text_splitter + BM25 索引 + REST API + Full-book UI + 355 tests 全绿；PHASE2_HANDOFF 已生成 |
+
+---
 
 ## PM 监控（Phase 7 — 已完成）
 
@@ -123,6 +133,16 @@
 ---
 
 ## Claude 最新回报
+
+### 2026-05-29：新 Phase 2 完成 — Reference Corpus 导入与索引
+
+- **数据模型**：`ReferenceCorpus` / `ReferenceChapter` / `ReferenceChunk` 三个 SQLAlchemy 2.0 模型 + User 反向关系 + schema.py 注册
+- **文本切分服务**：`text_splitter.py` — 中文章节标题识别（第N章/Markdown/数字标题 + 中文数字支持）、伪章节 fallback、重叠 chunk 切分（句末断点优先）
+- **搜索层扩展**：`ReferenceSearchIndex` 类 — 独立于 SearchIndex，从 `ReferenceChunk.tokens_json` 重建 BM25 索引
+- **REST API**：`/api/v1/reference-corpora` 8 个端点（CRUD + upload + chapters + chunks + search），完全隔离于 Project/StoryGraph
+- **前端 Full-book Mode**：StoryFoundryPage 替换占位 UI → 粘贴/上传 → processing 轮询 → indexed 搜索演示
+- **测试**：后端 215（新增 24）+ 前端 140 = **355 tests ALL PASS**
+- **文档**：PHASE2_HANDOFF.md 已生成，Brief STATUS=DONE，PROGRESS.md 已更新
 
 ### 2026-05-29：新 Phase 1 完成 — Story Foundry 三档拆书入口
 

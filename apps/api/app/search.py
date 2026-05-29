@@ -155,3 +155,75 @@ class SearchIndex:
 
     def search_cards(self, query: str, top_k: int = 5) -> list[dict]:
         return self.card_index.search(query, top_k)
+
+
+class ReferenceSearchIndex:
+    """BM25 search index for Reference Corpus chunks.
+
+    Completely isolated from project SearchIndex — no shared state,
+    no persistence to search_docs table. Index is rebuilt from
+    ReferenceChunk rows on demand.
+    """
+
+    def __init__(self):
+        self.index = BM25()
+
+    def add_chunk(self, chunk_id: str, chapter_title: str, content: str, meta: dict | None = None) -> None:
+        """Add a reference chunk to the index."""
+        self.index.add_document(
+            doc_id=chunk_id,
+            title=chapter_title,
+            content=content,
+            meta=meta or {},
+        )
+
+    def build(self) -> None:
+        self.index.build()
+
+    def search(self, query: str, top_k: int = 10) -> list[dict]:
+        return self.index.search(query, top_k)
+
+    @classmethod
+    def from_persisted_tokens(cls, chunks: list) -> "ReferenceSearchIndex":
+        """Build index from ReferenceChunk ORM objects with pre-tokenized tokens_json."""
+        from collections import Counter
+        import json
+
+        idx = cls()
+        for chunk in chunks:
+            tokens: list[str] = []
+            try:
+                tokens = json.loads(chunk.tokens_json) if chunk.tokens_json else []
+            except json.JSONDecodeError:
+                pass
+
+            if tokens:
+                term_freq = Counter(tokens)
+                meta = {
+                    "chapter_id": chunk.chapter_id,
+                    "corpus_id": chunk.corpus_id,
+                    "sequence": chunk.sequence,
+                }
+                idx.index.documents.append({
+                    "id": chunk.id,
+                    "title": "",
+                    "content": chunk.content,
+                    "meta": meta,
+                    "tokens": tokens,
+                })
+                idx.index.doc_terms.append(dict(term_freq))
+                idx.index.doc_lengths.append(len(tokens))
+                for term in set(tokens):
+                    idx.index.term_df[term] = idx.index.term_df.get(term, 0) + 1
+                idx.index.total_docs += 1
+            else:
+                # Fallback: tokenize on the fly
+                idx.add_chunk(
+                    chunk_id=chunk.id,
+                    chapter_title="",
+                    content=chunk.content,
+                    meta={"chapter_id": chunk.chapter_id, "corpus_id": chunk.corpus_id, "sequence": chunk.sequence},
+                )
+
+        idx.build()
+        return idx

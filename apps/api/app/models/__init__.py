@@ -13,6 +13,9 @@ from app.models.summary import Summary
 from app.models.review_metric import ReviewMetric
 from app.models.reader_pulse import ReaderPulseResult
 from app.models.project_prompt import ProjectPrompt
+from app.models.reference_corpus import ReferenceCorpus
+from app.models.reference_chapter import ReferenceChapter
+from app.models.reference_chunk import ReferenceChunk
 
 __all__ = [
     "User", "Project", "Chapter",
@@ -21,4 +24,5 @@ __all__ = [
     "UserLlmSettings", "SimulationJob", "SearchDoc",
     "DisambiguationItem", "Summary", "ReviewMetric",
     "ReaderPulseResult", "ProjectPrompt",
+    "ReferenceCorpus", "ReferenceChapter", "ReferenceChunk",
 ]

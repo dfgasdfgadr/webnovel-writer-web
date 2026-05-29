@@ -1,6 +1,6 @@
 ﻿# NovelCraft Phase 2 执行简报
 
-> **STATUS**: PENDING  
+> **STATUS**: DONE  
 > **阶段**：Phase 2 — Reference Corpus 导入、章节切分与 BM25 索引  
 > **创建日期**：2026-05-29  
 > **PM 签发**：Cursor  

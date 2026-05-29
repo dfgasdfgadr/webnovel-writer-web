@@ -6,6 +6,7 @@ import {
   Sparkles, Lightbulb, Users, Globe, Timer, ArrowRight,
   ShieldAlert, BookMarked, ChevronRight, Wand2, FileText,
   PenTool, CheckCircle2, AlertCircle, Zap, Layers,
+  Upload, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +106,16 @@ export function StoryFoundryPage() {
   const [mode, setMode] = useState<FoundryMode>("quick");
   const [chapterGroups, setChapterGroups] = useState<ChapterGroupInput[]>([{ id: 1, label: "", content: "" }]);
 
+  // Full-book mode state
+  const [fullBookStep, setFullBookStep] = useState<"input" | "processing" | "indexed">("input");
+  const [fullBookInputMode, setFullBookInputMode] = useState<"paste" | "upload">("paste");
+  const [corpusText, setCorpusText] = useState("");
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [corpusId, setCorpusId] = useState<string | null>(null);
+  const [corpusDetail, setCorpusDetail] = useState<api.ReferenceCorpusDetail | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<api.ReferenceSearchResult[]>([]);
+
   const deconstructMut = useMutation({
     mutationFn: api.foundryDeconstruct,
     onSuccess: (data) => {
@@ -171,6 +182,39 @@ export function StoryFoundryPage() {
     },
   });
 
+  const createCorpusMut = useMutation({
+    mutationFn: api.createReferenceCorpus,
+    onSuccess: (data) => {
+      setCorpusId(data.id);
+      pollCorpusStatus(data.id);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "创建失败");
+      setFullBookStep("input");
+    },
+  });
+
+  const uploadCorpusMut = useMutation({
+    mutationFn: ({ file, title }: { file: File; title?: string }) =>
+      api.uploadReferenceCorpus(file, title),
+    onSuccess: (data) => {
+      setCorpusId(data.id);
+      pollCorpusStatus(data.id);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "上传失败");
+      setFullBookStep("input");
+    },
+  });
+
+  const searchCorpusMut = useMutation({
+    mutationFn: ({ corpusId, query }: { corpusId: string; query: string }) =>
+      api.searchReferenceCorpus(corpusId, query),
+    onSuccess: (data) => {
+      setSearchResults(data.results);
+    },
+  });
+
   const addSample = useCallback(() => {
     if (samples.length >= 3) {
       toast.info("最多支持 3 段样章");
@@ -206,6 +250,51 @@ export function StoryFoundryPage() {
     [questionsMut]
   );
 
+  const pollCorpusStatus = useCallback((id: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const detail = await api.getReferenceCorpus(id);
+        setCorpusDetail(detail);
+        if (detail.index_status === "ready") {
+          clearInterval(interval);
+          setFullBookStep("indexed");
+        } else if (detail.index_status === "error") {
+          clearInterval(interval);
+          toast.error(`索引失败: ${detail.index_error || "未知错误"}`);
+          setFullBookStep("input");
+        }
+      } catch {
+        clearInterval(interval);
+      }
+    }, 1500);
+    setTimeout(() => clearInterval(interval), 60000);
+  }, []);
+
+  const handleSubmitFullBook = useCallback(() => {
+    if (!bookTitle.trim()) {
+      toast.error("请输入参考书书名");
+      return;
+    }
+    setFullBookStep("processing");
+    if (uploadFile) {
+      uploadCorpusMut.mutate({ file: uploadFile, title: bookTitle });
+    } else if (corpusText.trim()) {
+      createCorpusMut.mutate({
+        title: bookTitle,
+        content: corpusText.trim(),
+      });
+    }
+  }, [bookTitle, uploadFile, corpusText, uploadCorpusMut, createCorpusMut]);
+
+  const handleSearch = useCallback(() => {
+    if (!corpusId || !searchQuery.trim()) return;
+    searchCorpusMut.mutate({ corpusId, query: searchQuery.trim() });
+  }, [corpusId, searchQuery, searchCorpusMut]);
+
+  const handleProceedToDeconstruct = useCallback(() => {
+    toast.info("Phase 3 将支持基于 RAG 的拆书分析");
+  }, []);
+
   const startDeconstruct = useCallback(() => {
     if (!bookTitle.trim()) {
       toast.error("请输入参考书书名");
@@ -213,7 +302,7 @@ export function StoryFoundryPage() {
     }
 
     if (mode === "fullbook") {
-      toast.info("Full-book RAG 模式将在下一阶段开放");
+      handleSubmitFullBook();
       return;
     }
 
@@ -249,7 +338,7 @@ export function StoryFoundryPage() {
         chapter_groups: groups,
       });
     }
-  }, [bookTitle, mode, samples, chapterGroups, deconstructMut]);
+  }, [bookTitle, mode, samples, chapterGroups, deconstructMut, handleSubmitFullBook]);
 
   const handleSelectOption = useCallback((questionId: string, optionId: string) => {
     setSelections((prev) => ({ ...prev, [questionId]: optionId }));
@@ -361,7 +450,7 @@ export function StoryFoundryPage() {
                   <BookOpen className="size-5 text-emerald-500" />
                   <h3 className="font-medium text-sm">全书拆解</h3>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Full-book RAG（即将支持）
+                    Full-book RAG
                   </p>
                 </CardContent>
               </Card>
@@ -471,26 +560,125 @@ export function StoryFoundryPage() {
               </Card>
             )}
 
-            {/* Full-book Mode: Placeholder */}
-            {mode === "fullbook" && (
-              <Card className="border-dashed">
-                <CardContent className="p-6 text-center space-y-3">
-                  <BookOpen className="size-8 mx-auto text-muted-foreground" />
-                  <h3 className="font-medium">Full-book RAG 模式即将开放</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    该模式将在下一阶段支持整本书上传和自动索引，提供更全面的拆书分析。
-                    当前请使用<span className="text-primary font-medium">快速模式</span>或<span className="text-primary font-medium">代表章节</span>模式。
-                  </p>
-                </CardContent>
-              </Card>
+            {/* Full-book Mode */}
+            {mode === "fullbook" && fullBookStep === "input" && (
+              <div className="space-y-4">
+                <Tabs value={fullBookInputMode} onValueChange={(v) => setFullBookInputMode(v as "paste" | "upload")}>
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="paste">粘贴文本</TabsTrigger>
+                    <TabsTrigger value="upload">上传文件</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="paste" className="space-y-2">
+                    <Textarea
+                      value={corpusText}
+                      onChange={(e) => setCorpusText(e.target.value)}
+                      placeholder="粘贴整本书的文本内容..."
+                      rows={12}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      支持自动识别"第N章"格式，或按固定长度切分
+                    </p>
+                  </TabsContent>
+                  <TabsContent value="upload" className="space-y-2">
+                    <div className="border-2 border-dashed rounded-lg p-8 text-center">
+                      <input
+                        type="file"
+                        accept=".txt,.md"
+                        onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        id="corpus-upload"
+                      />
+                      <label htmlFor="corpus-upload" className="cursor-pointer block">
+                        <Upload className="size-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm">点击选择 .txt 或 .md 文件</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {uploadFile ? uploadFile.name : "支持 UTF-8 编码的文本文件"}
+                        </p>
+                      </label>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
             )}
 
-            {mode !== "fullbook" && (
-              <Button onClick={startDeconstruct} className="w-full" disabled={!bookTitle.trim()}>
-                <Sparkles className="size-4 mr-1" />
-                开始分析并生成选择题
-              </Button>
+            {mode === "fullbook" && fullBookStep === "processing" && (
+              <div className="text-center py-8 space-y-4">
+                <Loader2 className="size-8 animate-spin mx-auto text-primary" />
+                <p className="font-medium">正在处理参考文本...</p>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>切分章节: {corpusDetail?.total_chapters || 0} 章</p>
+                  <p>生成检索块: {corpusDetail?.total_chunks || 0} 个</p>
+                </div>
+              </div>
             )}
+
+            {mode === "fullbook" && fullBookStep === "indexed" && corpusDetail && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-green-500" />
+                      索引已就绪
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div>书名: {corpusDetail.title}</div>
+                    <div>章节数: {corpusDetail.total_chapters} 章</div>
+                    <div>检索块: {corpusDetail.total_chunks} 个</div>
+                    <div>总字数: {corpusDetail.total_chars.toLocaleString()} 字</div>
+                  </CardContent>
+                </Card>
+
+                {/* Search demo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">搜索测试</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex gap-2">
+                      <Input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="输入关键词搜索参考文本..."
+                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                      />
+                      <Button onClick={handleSearch} disabled={searchCorpusMut.isPending}>
+                        <Search className="size-4" />
+                      </Button>
+                    </div>
+                    {searchResults.length > 0 && (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {searchResults.map((r, i) => (
+                          <div key={i} className="p-2 rounded bg-muted/50 text-xs">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="secondary" className="text-[10px]">
+                                {r.chapter_title || "未知章节"}
+                              </Badge>
+                              <span className="text-muted-foreground">score: {r.score.toFixed(3)}</span>
+                            </div>
+                            <p className="line-clamp-3">{r.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Button onClick={handleProceedToDeconstruct} className="w-full">
+                  <ArrowRight className="size-4 mr-1" />
+                  继续拆书分析
+                </Button>
+              </div>
+            )}
+
+            <Button
+              onClick={startDeconstruct}
+              className="w-full"
+              disabled={!bookTitle.trim() || (mode === "fullbook" && fullBookStep !== "input")}
+            >
+              <Sparkles className="size-4 mr-1" />
+              {mode === "fullbook" ? "开始建立索引" : "开始分析并生成选择题"}
+            </Button>
 
             <div className="flex gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">

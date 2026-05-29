@@ -427,6 +427,55 @@ export interface PolishResponse {
   token_output: number;
 }
 
+// ─── Reference Corpus ───
+export interface ReferenceCorpusPublic {
+  id: string;
+  title: string;
+  author: string | null;
+  description: string | null;
+  source_type: string;
+  source_filename: string | null;
+  total_chapters: number;
+  total_chunks: number;
+  total_chars: number;
+  index_status: string;
+  index_error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReferenceChapterPublic {
+  id: string;
+  sequence: number;
+  title: string;
+  char_count: number;
+  chunk_count: number;
+}
+
+export interface ReferenceCorpusDetail extends ReferenceCorpusPublic {
+  chapters: ReferenceChapterPublic[];
+}
+
+export interface ReferenceCorpusList {
+  items: ReferenceCorpusPublic[];
+  total: number;
+}
+
+export interface ReferenceSearchResult {
+  doc_id: string;
+  title: string;
+  content: string;
+  score: number;
+  meta: Record<string, unknown>;
+  chapter_title: string | null;
+}
+
+export interface ReferenceSearchResponse {
+  query: string;
+  total: number;
+  results: ReferenceSearchResult[];
+}
+
 // ─── API Wrappers ───
 export interface ApiError {
   detail: string;

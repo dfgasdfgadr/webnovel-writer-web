@@ -220,16 +220,17 @@ describe("StoryFoundryPage", () => {
     });
   });
 
-  it("shows placeholder in fullbook mode without calling API", async () => {
+  it("shows fullbook input options without calling foundry API", async () => {
     renderPage();
 
     // Switch to fullbook mode
     fireEvent.click(screen.getAllByText("全书拆解")[0]);
 
-    // Should show placeholder text
-    expect(screen.getAllByText(/Full-book RAG 模式即将开放/)[0]).toBeInTheDocument();
+    // Should show paste/upload tabs
+    expect(screen.getByText("粘贴文本")).toBeInTheDocument();
+    expect(screen.getByText("上传文件")).toBeInTheDocument();
 
-    // Mock should not be called
+    // Mock should not be called automatically
     expect(mockFoundryDeconstruct).not.toHaveBeenCalled();
   });
 });
