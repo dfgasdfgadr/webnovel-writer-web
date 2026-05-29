@@ -13,6 +13,11 @@ class ProjectCreate(BaseModel):
     constraints: list[str] | None = None
     target_words: int | None = None
     target_chapters: int | None = None
+    # Foundry mode fields — when creating from Story Foundry compose output
+    premise: dict | None = None
+    master_setting: dict | None = None
+    synopsis: dict | None = None
+    chapter_outlines: list[dict] | None = None
 
 
 class ProjectUpdate(BaseModel):

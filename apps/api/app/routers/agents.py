@@ -1344,3 +1344,134 @@ async def run_reader_pulse(
         "overall_verdict": pulse.overall_verdict,
         "created_at": pulse.created_at.isoformat() if pulse.created_at else None,
     }
+
+
+# --- Story Foundry ---
+
+class FoundryDeconstructRequest(BaseModel):
+    book_title: str
+    sample_chapters: list[str] = []
+
+
+class FoundryQuestionsRequest(BaseModel):
+    deconstruction: dict = {}
+    preferences: dict | None = None
+
+
+class FoundryComposeRequest(BaseModel):
+    book_title: str
+    deconstruction: dict = {}
+    selections: dict = {}
+    custom_notes: str = ""
+
+
+@router.post("/foundry/deconstruct")
+async def foundry_deconstruct(
+    body: FoundryDeconstructRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Deconstruct a reference book for transferable patterns."""
+    from app.agents.deconstruct import DeconstructAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    agent = DeconstructAgent(llm=llm) if llm else DeconstructAgent()
+    result = await agent.run(book_title=body.book_title, sample_chapters=body.sample_chapters)
+
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error or "Deconstruct failed")
+
+    data = result.data
+    # Normalize deconstruction fields
+    deconstruction = {
+        "golden_chapters": data.get("golden_chapters") or data.get("golden_three", []),
+        "hooks": data.get("hooks") or data.get("pleasure_points", {}).get("patterns", []),
+        "character_patterns": data.get("character_patterns") or data.get("character_design", []),
+        "world_patterns": data.get("world_patterns") or data.get("world_building", []),
+        "pacing": data.get("pacing") or data.get("narration", []),
+        "transferable_patterns": data.get("transferable_patterns", []),
+        "red_flags": data.get("red_flags") or data.get("warnings", []),
+    }
+
+    return {
+        "status": "done",
+        "deconstruction": deconstruction,
+        "fallback": False,
+    }
+
+
+@router.post("/foundry/questions")
+async def foundry_questions(
+    body: FoundryQuestionsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate strategic choice questions from deconstruction."""
+    from app.agents.foundry_question import FoundryQuestionAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    agent = FoundryQuestionAgent(llm=llm) if llm else FoundryQuestionAgent()
+    result = await agent.run(
+        deconstruction=body.deconstruction,
+        preferences=body.preferences or {},
+    )
+
+    if not result.success:
+        # Return fallback questions on error
+        from app.agents.foundry_question import FALLBACK_QUESTIONS
+        return {
+            "question_sets": FALLBACK_QUESTIONS,
+            "fallback": True,
+        }
+
+    data = result.data
+    return {
+        "question_sets": data.get("question_sets", []),
+        "fallback": data.get("fallback", False),
+    }
+
+
+@router.post("/foundry/compose")
+async def foundry_compose(
+    body: FoundryComposeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Compose complete story setup from deconstruction and user selections."""
+    from app.agents.foundry_compose import FoundryComposerAgent
+    from app.agents.llm import LLMProvider
+
+    try:
+        llm = await LLMProvider.for_user(current_user.id, db)
+    except Exception:
+        llm = None
+
+    agent = FoundryComposerAgent(llm=llm) if llm else FoundryComposerAgent()
+    result = await agent.run(
+        book_title=body.book_title,
+        deconstruction=body.deconstruction,
+        selections=body.selections,
+        custom_notes=body.custom_notes,
+    )
+
+    if not result.success:
+        raise HTTPException(status_code=500, detail=result.error or "Compose failed")
+
+    data = result.data
+    return {
+        "premise": data.get("premise", {}),
+        "master_setting": data.get("master_setting", {}),
+        "synopsis": data.get("synopsis", {}),
+        "first_volume_chapters": data.get("first_volume_chapters", []),
+        "fallback": data.get("fallback", False),
+    }

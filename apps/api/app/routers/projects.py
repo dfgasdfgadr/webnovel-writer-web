@@ -171,18 +171,30 @@ async def create_project(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Build premise_json from wizard input
-    premise = {
-        "genre": body.genre or "",
-        "hook": body.hook or body.description or "",
-        "protagonist": body.protagonist or {},
-        "world_building": body.world_building or {},
-        "power_system": body.power_system or "",
-        "golden_finger": body.golden_finger or "",
-        "constraints": body.constraints or [],
-        "target_words": body.target_words or 0,
-        "target_chapters": body.target_chapters or 0,
-    }
+    # Detect Foundry mode: when premise/master_setting/synopsis/chapter_outlines are provided
+    is_foundry_mode = bool(body.premise and body.synopsis and body.chapter_outlines)
+
+    if is_foundry_mode:
+        premise = body.premise
+        synopsis_data = body.synopsis
+        master_setting = body.master_setting or {}
+        chapter_outlines = body.chapter_outlines or []
+    else:
+        # Build premise_json from wizard input
+        premise = {
+            "genre": body.genre or "",
+            "hook": body.hook or body.description or "",
+            "protagonist": body.protagonist or {},
+            "world_building": body.world_building or {},
+            "power_system": body.power_system or "",
+            "golden_finger": body.golden_finger or "",
+            "constraints": body.constraints or [],
+            "target_words": body.target_words or 0,
+            "target_chapters": body.target_chapters or 0,
+        }
+        synopsis_data = None
+        master_setting = {}
+        chapter_outlines = []
 
     # Generate root_dir
     slug = _slugify(body.title)
@@ -205,32 +217,121 @@ async def create_project(
     # Create directory skeleton
     _ensure_dir_skeleton(root_dir)
 
-    # Generate settings files via InitAgent
-    settings_data, settings_warnings = await _generate_settings_from_premise(premise, current_user.id, db)
-    written_files = _write_settings_files(root_dir, settings_data)
+    all_warnings: list[str] = []
+    written_files: list[str] = []
 
-    # Generate synopsis via ArchitectAgent
-    synopsis_data, synopsis_warnings = await _generate_synopsis_from_premise(premise, current_user.id, db)
-    all_warnings = settings_warnings + synopsis_warnings
-
-    if synopsis_data:
+    if is_foundry_mode:
+        # Foundry mode: use provided data directly, skip LLM generation
         project.synopsis_json = json.dumps(synopsis_data, ensure_ascii=False)
+        project.genre = premise.get("genre", body.genre or "")
 
-    # Write synopsis as 总纲.md
-    if synopsis_data:
-        synopsis_text = synopsis_data.get("synopsis", "")
+        # Write settings files from master_setting
+        settings_dir = Path(root_dir) / "设定集"
+        settings_dir.mkdir(parents=True, exist_ok=True)
+        if master_setting.get("world_overview"):
+            world_path = settings_dir / "世界观.md"
+            world_path.write_text(f"# 世界观\n\n{master_setting['world_overview']}\n", encoding="utf-8")
+            written_files.append(str(world_path))
+        if master_setting.get("power_system"):
+            ps = master_setting["power_system"]
+            if isinstance(ps, dict):
+                ps_text = f"# 力量体系\n\n## {ps.get('name', '力量体系')}\n\n{ps.get('description', '')}\n\n"
+                ps_text += f"### 进阶方式\n{ps.get('progression', '')}\n\n"
+                if ps.get("limitations"):
+                    ps_text += f"### 限制\n" + "\n".join(f"- {l}" for l in ps["limitations"])
+            else:
+                ps_text = f"# 力量体系\n\n{ps}\n"
+            power_path = settings_dir / "力量体系.md"
+            power_path.write_text(ps_text, encoding="utf-8")
+            written_files.append(str(power_path))
+
+        # Write synopsis as 总纲.md
+        synopsis_text = synopsis_data.get("synopsis", "") if isinstance(synopsis_data, dict) else ""
         if synopsis_text:
             outline_dir = Path(root_dir) / "大纲"
             outline_dir.mkdir(parents=True, exist_ok=True)
-            synopsis_md = f"# {synopsis_data.get('title', body.title)}\n\n"
-            synopsis_md += f"**题材**：{synopsis_data.get('genre', premise.get('genre', ''))}\n\n"
-            synopsis_md += f"**核心卖点**：{synopsis_data.get('hook', premise.get('hook', ''))}\n\n"
+            title_text = synopsis_data.get("title", body.title) if isinstance(synopsis_data, dict) else body.title
+            genre_text = synopsis_data.get("genre", premise.get("genre", "")) if isinstance(synopsis_data, dict) else premise.get("genre", "")
+            hook_text = synopsis_data.get("hook", premise.get("hook", "")) if isinstance(synopsis_data, dict) else premise.get("hook", "")
+            synopsis_md = f"# {title_text}\n\n"
+            synopsis_md += f"**题材**：{genre_text}\n\n"
+            synopsis_md += f"**核心卖点**：{hook_text}\n\n"
             synopsis_md += f"## 故事概述\n\n{synopsis_text}\n\n"
-            synopsis_md += "## 分卷规划\n\n"
-            for vol in synopsis_data.get("volumes", []):
-                synopsis_md += f"- **第{vol.get('num', '?')}卷 {vol.get('title', '')}**：{vol.get('summary', '')}（{vol.get('target_chapters', '?')}章）\n"
+            volumes = synopsis_data.get("volumes", []) if isinstance(synopsis_data, dict) else []
+            if volumes:
+                synopsis_md += "## 分卷规划\n\n"
+                for vol in volumes:
+                    synopsis_md += f"- **第{vol.get('num', '?')}卷 {vol.get('title', '')}**：{vol.get('summary', '')}（{vol.get('target_chapters', '?')}章）\n"
             (outline_dir / "总纲.md").write_text(synopsis_md, encoding="utf-8")
             written_files.append(str(outline_dir / "总纲.md"))
+
+        # Create chapters in DB and write chapter contracts
+        from app.models.chapter import Chapter as ChapterModel, calculate_word_count
+        ss = StorySystem(root_dir)
+        for ch in chapter_outlines:
+            ch_num = ch.get("chapter_num", 0)
+            ch_title = ch.get("title", f"第{ch_num}章")
+            ch_outline = ch.get("outline", "")
+            chapter = ChapterModel(
+                project_id=project.id,
+                title=ch_title,
+                number=ch_num,
+                content="",
+                outline=ch_outline,
+                word_count=0,
+                status="draft",
+            )
+            db.add(chapter)
+            # Save chapter contract to story-system
+            ss.save_chapter_contract(ch_num, {
+                "title": ch_title,
+                "outline": ch_outline,
+                "must_cover_nodes": ch.get("must_cover_nodes", []),
+                "forbidden_zones": ch.get("forbidden_zones", []),
+                "key_characters": ch.get("key_characters", []),
+                "target_words": ch.get("target_words", 3000),
+                "generated_at": project.created_at.isoformat() if project.created_at else "",
+            })
+
+        # Save volume contract for first volume
+        volumes = synopsis_data.get("volumes", []) if isinstance(synopsis_data, dict) else []
+        if volumes:
+            first_vol = volumes[0]
+            ss.save_volume_contract(1, {
+                "num": first_vol.get("num", 1),
+                "title": first_vol.get("title", "第一卷"),
+                "summary": first_vol.get("summary", ""),
+                "target_chapters": first_vol.get("target_chapters", len(chapter_outlines)),
+                "chapter_count": len(chapter_outlines),
+            })
+
+    else:
+        # Normal mode: generate settings and synopsis via LLM agents
+        settings_data, settings_warnings = await _generate_settings_from_premise(premise, current_user.id, db)
+        written_files = _write_settings_files(root_dir, settings_data)
+        all_warnings = settings_warnings
+
+        synopsis_data, synopsis_warnings = await _generate_synopsis_from_premise(premise, current_user.id, db)
+        all_warnings = all_warnings + synopsis_warnings
+
+        if synopsis_data:
+            project.synopsis_json = json.dumps(synopsis_data, ensure_ascii=False)
+
+        # Write synopsis as 总纲.md
+        if synopsis_data:
+            synopsis_text = synopsis_data.get("synopsis", "")
+            if synopsis_text:
+                outline_dir = Path(root_dir) / "大纲"
+                outline_dir.mkdir(parents=True, exist_ok=True)
+                synopsis_md = f"# {synopsis_data.get('title', body.title)}\n\n"
+                synopsis_md += f"**题材**：{synopsis_data.get('genre', premise.get('genre', ''))}\n\n"
+                synopsis_md += f"**核心卖点**：{synopsis_data.get('hook', premise.get('hook', ''))}\n\n"
+                synopsis_md += f"## 故事概述\n\n{synopsis_text}\n\n"
+                synopsis_md += "## 分卷规划\n\n"
+                for vol in synopsis_data.get("volumes", []):
+                    synopsis_md += f"- **第{vol.get('num', '?')}卷 {vol.get('title', '')}**：{vol.get('summary', '')}（{vol.get('target_chapters', '?')}章）\n"
+                (outline_dir / "总纲.md").write_text(synopsis_md, encoding="utf-8")
+                written_files.append(str(outline_dir / "总纲.md"))
 
     # Write idea_bank.json
     idea_bank = {
@@ -251,7 +352,7 @@ async def create_project(
 
     # Save MASTER_SETTING
     ss = StorySystem(root_dir)
-    ss.save_master_setting({
+    master_data = {
         "title": body.title,
         "genre": premise.get("genre", ""),
         "hook": premise.get("hook", ""),
@@ -260,11 +361,16 @@ async def create_project(
         "power_system": premise.get("power_system", ""),
         "golden_finger": premise.get("golden_finger", ""),
         "constraints": premise.get("constraints", []),
-        "synopsis": synopsis_data.get("synopsis", "") if synopsis_data else "",
-        "volumes": synopsis_data.get("volumes", []) if synopsis_data else [],
+        "synopsis": (synopsis_data.get("synopsis", "") if isinstance(synopsis_data, dict) else "") if synopsis_data else "",
+        "volumes": (synopsis_data.get("volumes", []) if isinstance(synopsis_data, dict) else []) if synopsis_data else [],
         "settings_files": written_files,
         "created_at": project.created_at.isoformat() if project.created_at else "",
-    })
+    }
+    if is_foundry_mode and master_setting:
+        # Merge foundry master_setting into MASTER_SETTING
+        if isinstance(master_setting, dict):
+            master_data.update(master_setting)
+    ss.save_master_setting(master_data)
 
     # Fire workflow trigger: onProjectCreate (uses shared engine singleton)
     try:
