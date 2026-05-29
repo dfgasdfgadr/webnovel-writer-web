@@ -1,6 +1,6 @@
 ﻿# NovelCraft Phase 3 执行简报
 
-> **STATUS**: PENDING  
+> **STATUS**: DONE  
 > **阶段**：Phase 3 — Full-book RAG Deconstruction 全书拆解  
 > **创建日期**：2026-05-29  
 > **PM 签发**：Cursor  

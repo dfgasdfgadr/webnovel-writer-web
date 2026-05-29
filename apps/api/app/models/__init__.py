@@ -16,6 +16,8 @@ from app.models.project_prompt import ProjectPrompt
 from app.models.reference_corpus import ReferenceCorpus
 from app.models.reference_chapter import ReferenceChapter
 from app.models.reference_chunk import ReferenceChunk
+from app.models.deconstruction_run import DeconstructionRun
+from app.models.reference_insight import ReferenceInsight
 
 __all__ = [
     "User", "Project", "Chapter",
@@ -25,4 +27,5 @@ __all__ = [
     "DisambiguationItem", "Summary", "ReviewMetric",
     "ReaderPulseResult", "ProjectPrompt",
     "ReferenceCorpus", "ReferenceChapter", "ReferenceChunk",
+    "DeconstructionRun", "ReferenceInsight",
 ]

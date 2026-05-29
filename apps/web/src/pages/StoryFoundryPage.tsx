@@ -36,6 +36,8 @@ interface SampleInput {
 
 type FoundryMode = "quick" | "representative" | "fullbook";
 
+type FullBookStep = "input" | "processing" | "indexed" | "deconstructing" | "deconstruct_done";
+
 interface ChapterGroupInput {
   id: number;
   label: string;
@@ -107,7 +109,7 @@ export function StoryFoundryPage() {
   const [chapterGroups, setChapterGroups] = useState<ChapterGroupInput[]>([{ id: 1, label: "", content: "" }]);
 
   // Full-book mode state
-  const [fullBookStep, setFullBookStep] = useState<"input" | "processing" | "indexed">("input");
+  const [fullBookStep, setFullBookStep] = useState<FullBookStep>("input");
   const [fullBookInputMode, setFullBookInputMode] = useState<"paste" | "upload">("paste");
   const [corpusText, setCorpusText] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -115,6 +117,8 @@ export function StoryFoundryPage() {
   const [corpusDetail, setCorpusDetail] = useState<api.ReferenceCorpusDetail | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<api.ReferenceSearchResult[]>([]);
+  const [deconstructRunId, setDeconstructRunId] = useState<string | null>(null);
+  const [deconstructRunDetail, setDeconstructRunDetail] = useState<api.DeconstructionRunPublic | null>(null);
 
   const deconstructMut = useMutation({
     mutationFn: api.foundryDeconstruct,
@@ -215,6 +219,20 @@ export function StoryFoundryPage() {
     },
   });
 
+  const startDeconstructMut = useMutation({
+    mutationFn: ({ corpusId, targetGenre }: { corpusId: string; targetGenre?: string }) =>
+      api.startFullBookDeconstruct(corpusId, targetGenre),
+    onSuccess: (data) => {
+      setDeconstructRunId(data.run_id);
+      setFullBookStep("deconstructing");
+      pollDeconstructRun(data.run_id);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "启动拆解失败");
+      setFullBookStep("indexed");
+    },
+  });
+
   const addSample = useCallback(() => {
     if (samples.length >= 3) {
       toast.info("最多支持 3 段样章");
@@ -291,9 +309,62 @@ export function StoryFoundryPage() {
     searchCorpusMut.mutate({ corpusId, query: searchQuery.trim() });
   }, [corpusId, searchQuery, searchCorpusMut]);
 
+  const pollDeconstructRun = useCallback((runId: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const detail = await api.getDeconstructionRun(runId);
+        setDeconstructRunDetail(detail);
+        if (detail.status === "done") {
+          clearInterval(interval);
+          setFullBookStep("deconstruct_done");
+          // Build deconstruction from fullbook report for compatibility
+          const report = detail.fullbook_report || {};
+          setDeconstruction({
+            golden_chapters: report.macro_structure ? [JSON.stringify(report.macro_structure).slice(0, 500)] : [],
+            hooks: (report.reader_reward_patterns || []).map((p: Record<string, unknown>) => String(p.name || p.description || "")),
+            character_patterns: (report.character_patterns || []).map((p: Record<string, unknown>) => String(p.name || p.description || "")),
+            world_patterns: (report.world_patterns || []).map((p: Record<string, unknown>) => String(p.name || p.description || "")),
+            pacing: (report.pacing_curve || {}).patterns ? (report.pacing_curve.patterns as Array<Record<string, unknown>>).map((p) => String(p.name || p.description || "")) : [],
+            transferable_patterns: detail.transferable_patterns || [],
+            red_flags: detail.red_flags || [],
+          });
+          // Auto-fetch questions
+          if (detail.transferable_patterns.length > 0) {
+            fetchQuestions({
+              golden_chapters: [],
+              hooks: [],
+              character_patterns: (report.character_patterns || []).map((p: Record<string, unknown>) => String(p.description || "")),
+              world_patterns: (report.world_patterns || []).map((p: Record<string, unknown>) => String(p.description || "")),
+              pacing: [],
+              transferable_patterns: detail.transferable_patterns,
+              red_flags: detail.red_flags,
+            });
+          }
+        } else if (detail.status === "failed") {
+          clearInterval(interval);
+          toast.error(`拆解失败: ${detail.error_message || "未知错误"}`);
+          setFullBookStep("indexed");
+        }
+      } catch {
+        clearInterval(interval);
+        toast.error("查询拆解状态失败");
+        setFullBookStep("indexed");
+      }
+    }, 2000);
+    // 10 minute timeout
+    setTimeout(() => clearInterval(interval), 600000);
+  }, [fetchQuestions]);
+
   const handleProceedToDeconstruct = useCallback(() => {
-    toast.info("Phase 3 将支持基于 RAG 的拆书分析");
-  }, []);
+    if (!corpusId) {
+      toast.error("语料库未就绪");
+      return;
+    }
+    startDeconstructMut.mutate({
+      corpusId,
+      targetGenre: "", // Could be extended with genre selection UI
+    });
+  }, [corpusId, startDeconstructMut]);
 
   const startDeconstruct = useCallback(() => {
     if (!bookTitle.trim()) {
@@ -612,6 +683,172 @@ export function StoryFoundryPage() {
               </div>
             )}
 
+            {mode === "fullbook" && fullBookStep === "deconstructing" && (
+              <div className="text-center py-8 space-y-4">
+                <Loader2 className="size-8 animate-spin mx-auto text-primary" />
+                <p className="font-medium">正在进行全书拆解分析...</p>
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  <p>当前步骤: {deconstructRunDetail?.phase || "准备中"}</p>
+                  <p>进度: {deconstructRunDetail?.progress || 0}%</p>
+                </div>
+                <div className="w-64 mx-auto h-2 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary transition-all duration-500"
+                    style={{ width: `${deconstructRunDetail?.progress || 0}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  分层分析：chunk摘要 → 章节摘要 → 宏观结构 → 模式提取 → 原创约束
+                </p>
+              </div>
+            )}
+
+            {mode === "fullbook" && fullBookStep === "deconstruct_done" && deconstructRunDetail && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <CheckCircle2 className="size-4 text-green-500" />
+                      全书拆解完成
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4 text-sm">
+                    {/* Macro Structure */}
+                    {deconstructRunDetail.fullbook_report.macro_structure && (
+                      <div>
+                        <h4 className="font-medium mb-1 flex items-center gap-1">
+                          <BookMarked className="size-3.5 text-primary" />
+                          全书宏观结构
+                        </h4>
+                        <p className="text-muted-foreground">
+                          {(deconstructRunDetail.fullbook_report.macro_structure as Record<string, unknown>).overall_arc as string || "暂无"}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Transferable Patterns */}
+                    {deconstructRunDetail.transferable_patterns.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-1 flex items-center gap-1">
+                          <Lightbulb className="size-3.5 text-primary" />
+                          可迁移模式
+                          <Badge variant="secondary" className="text-[10px]">
+                            {deconstructRunDetail.transferable_patterns.length}
+                          </Badge>
+                        </h4>
+                        <ul className="space-y-1">
+                          {deconstructRunDetail.transferable_patterns.map((p, i) => (
+                            <li key={i} className="text-muted-foreground flex items-start gap-1">
+                              <span className="text-primary mt-0.5">•</span>
+                              {p}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Originality Constraints */}
+                    {deconstructRunDetail.originality_constraints.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-1 flex items-center gap-1">
+                          <ShieldAlert className="size-3.5 text-amber-500" />
+                          原创约束
+                          <Badge variant="secondary" className="text-[10px]">
+                            {deconstructRunDetail.originality_constraints.length}
+                          </Badge>
+                        </h4>
+                        <ul className="space-y-1">
+                          {deconstructRunDetail.originality_constraints.map((c, i) => (
+                            <li key={i} className="text-muted-foreground flex items-start gap-1">
+                              <span className="text-amber-500 mt-0.5">•</span>
+                              {c}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Red Flags */}
+                    {deconstructRunDetail.red_flags.length > 0 && (
+                      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                        <h4 className="font-medium mb-1 flex items-center gap-1 text-destructive">
+                          <AlertTriangle className="size-3.5" />
+                          风险提示
+                          <Badge variant="secondary" className="text-[10px]">
+                            {deconstructRunDetail.red_flags.length}
+                          </Badge>
+                        </h4>
+                        <ul className="space-y-1">
+                          {deconstructRunDetail.red_flags.map((f, i) => (
+                            <li key={i} className="text-destructive/80 text-xs flex items-start gap-1">
+                              <span>•</span>
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* Insights with evidence */}
+                    {deconstructRunDetail.insights.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-2 flex items-center gap-1">
+                          <Sparkles className="size-3.5 text-primary" />
+                          详细洞察
+                          <Badge variant="secondary" className="text-[10px]">
+                            {deconstructRunDetail.insights.length}
+                          </Badge>
+                        </h4>
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {deconstructRunDetail.insights.slice(0, 10).map((insight) => (
+                            <div key={insight.id} className="p-2 rounded bg-muted/50 text-xs">
+                              <div className="flex items-center gap-1 mb-1">
+                                <Badge variant="outline" className="text-[10px]">
+                                  {insight.insight_type}
+                                </Badge>
+                                {insight.transferable_pattern && (
+                                  <span className="text-primary">{insight.transferable_pattern}</span>
+                                )}
+                              </div>
+                              <p className="text-muted-foreground">{insight.summary}</p>
+                              {insight.evidence_chunk_ids.length > 0 && (
+                                <p className="text-[10px] text-muted-foreground mt-1">
+                                  证据块: {insight.evidence_chunk_ids.length} 个
+                                </p>
+                              )}
+                              {insight.forbidden_copying_risk && (
+                                <p className="text-[10px] text-destructive/70 mt-0.5">
+                                  风险: {insight.forbidden_copying_risk}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="flex justify-end gap-3">
+                  <Button variant="outline" onClick={() => setFullBookStep("indexed")}>
+                    返回
+                  </Button>
+                  <Button
+                    onClick={() => setStep("questions")}
+                    disabled={questionSets.length === 0}
+                  >
+                    <ArrowRight className="size-4 mr-1" />
+                    下一步：策略选择
+                    {questionSets.length > 0 && (
+                      <Badge variant="secondary" className="ml-2 text-xs">
+                        {questionSets.length} 题
+                      </Badge>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {mode === "fullbook" && fullBookStep === "indexed" && corpusDetail && (
               <div className="space-y-4">
                 <Card>
@@ -664,21 +901,25 @@ export function StoryFoundryPage() {
                   </CardContent>
                 </Card>
 
-                <Button onClick={handleProceedToDeconstruct} className="w-full">
-                  <ArrowRight className="size-4 mr-1" />
-                  继续拆书分析
-                </Button>
               </div>
             )}
 
-            <Button
-              onClick={startDeconstruct}
-              className="w-full"
-              disabled={!bookTitle.trim() || (mode === "fullbook" && fullBookStep !== "input")}
-            >
-              <Sparkles className="size-4 mr-1" />
-              {mode === "fullbook" ? "开始建立索引" : "开始分析并生成选择题"}
-            </Button>
+            {mode === "fullbook" && fullBookStep === "indexed" && (
+              <Button onClick={handleProceedToDeconstruct} className="w-full">
+                <Sparkles className="size-4 mr-1" />
+                开始全书拆解
+              </Button>
+            )}
+            {(mode !== "fullbook" || fullBookStep === "input") && (
+              <Button
+                onClick={startDeconstruct}
+                className="w-full"
+                disabled={!bookTitle.trim() || (mode === "fullbook" && fullBookStep !== "input")}
+              >
+                <Sparkles className="size-4 mr-1" />
+                {mode === "fullbook" ? "开始建立索引" : "开始分析并生成选择题"}
+              </Button>
+            )}
 
             <div className="flex gap-3 text-xs text-muted-foreground">
               <div className="flex items-center gap-1">

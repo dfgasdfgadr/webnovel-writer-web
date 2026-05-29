@@ -22,6 +22,16 @@
 |-------|------|------|----------|
 | 1 | Story Foundry 三档拆书入口 | DONE | [PHASE1_HANDOFF.md](handoffs/PHASE1_HANDOFF.md) |
 | 2 | Reference Corpus 导入与索引 | DONE | [PHASE2_HANDOFF.md](handoffs/PHASE2_HANDOFF.md) |
+| 3 | Full-book RAG 全书拆解 | DONE | [PHASE3_HANDOFF.md](handoffs/PHASE3_HANDOFF.md) |
+
+## PM 监控（新 Phase 3 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-29 | 已签发 | PM 签发新 PHASE3_EXECUTION_BRIEF（Full-book RAG Deconstruction 全书拆解） |
+| 2026-05-29 | **DONE** | DeconstructionRun/ReferenceInsight 模型 + FullBookDeconstructionAgent 分层拆书 + 异步 API + 前端进度/报告展示 + 369 tests 全绿；PHASE3_HANDOFF 已生成 |
+
+---
 
 ## PM 监控（新 Phase 2 — 已完成）
 
@@ -133,6 +143,15 @@
 ---
 
 ## Claude 最新回报
+
+### 2026-05-29：新 Phase 3 完成 — Full-book RAG 全书拆解
+
+- **数据模型**：`DeconstructionRun`（异步运行追踪：status/phase/progress/fullbook_report）+ `ReferenceInsight`（洞察提取：insight_type/summary/evidence_chunk_ids/transferable_pattern/forbidden_copying_risk）
+- **分层拆书 Agent**：`FullBookDeconstructionAgent` — chunk 摘要（batch 处理）→ chapter 摘要 → 宏观结构 → 模式提取（角色/反派/世界/力量/爽点/伏笔）→ 原创约束/风险提示；每次 LLM 调用输出 JSON，带 schema 校验
+- **异步 API**：`POST /agents/foundry/deconstruct/fullbook`（创建 run + `asyncio.create_task` 后台执行，立即返回 run_id）+ `GET /deconstruct-runs/{run_id}`（轮询状态，返回报告 + insights）；异常在任务内捕获，更新 run 为 failed
+- **前端**：StoryFoundryPage 扩展 fullbook 流程 — 索引完成后"开始全书拆解"按钮 → deconstructing 进度展示（phase + progress 条 + 分层步骤提示）→ deconstruct_done 报告展示（宏观结构/可迁移模式/原创约束/风险提示/洞察列表）→ 直接进入策略选择题
+- **测试**：后端 14 新增用例（Agent 6 + API 7 + 异常处理 1）；后端总计 229 + 前端 140 = **369 tests ALL PASS**
+- **文档**：PHASE3_HANDOFF.md 已生成，Brief STATUS=DONE，CLAUDE.md → Phase 3，PROGRESS.md 已更新
 
 ### 2026-05-29：新 Phase 2 完成 — Reference Corpus 导入与索引
 

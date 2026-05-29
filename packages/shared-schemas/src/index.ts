@@ -476,6 +476,58 @@ export interface ReferenceSearchResponse {
   results: ReferenceSearchResult[];
 }
 
+// ─── Deconstruction Run ───
+export type DeconstructionRunStatus = "pending" | "running" | "done" | "failed";
+
+export interface ReferenceInsightPublic {
+  id: string;
+  insight_type: string;
+  summary: string;
+  evidence_chunk_ids: string[];
+  transferable_pattern: string | null;
+  forbidden_copying_risk: string | null;
+}
+
+export interface FullBookReport {
+  macro_structure: Record<string, unknown>;
+  volume_patterns: Array<Record<string, unknown>>;
+  character_patterns: Array<Record<string, unknown>>;
+  world_patterns: Array<Record<string, unknown>>;
+  power_progression: Record<string, unknown>;
+  pacing_curve: Record<string, unknown>;
+  foreshadowing_patterns: Array<Record<string, unknown>>;
+  villain_patterns: Array<Record<string, unknown>>;
+  reader_reward_patterns: Array<Record<string, unknown>>;
+}
+
+export interface DeconstructionRunPublic {
+  run_id: string;
+  corpus_id: string;
+  status: DeconstructionRunStatus;
+  phase: string;
+  progress: number;
+  target_genre: string;
+  preferences: Record<string, unknown>;
+  fullbook_report: FullBookReport;
+  transferable_patterns: string[];
+  originality_constraints: string[];
+  red_flags: string[];
+  insights: ReferenceInsightPublic[];
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+  finished_at: string | null;
+}
+
+export interface DeconstructionRunStartResponse {
+  run_id: string;
+  status: DeconstructionRunStatus;
+  phase: string;
+  progress: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ─── API Wrappers ───
 export interface ApiError {
   detail: string;

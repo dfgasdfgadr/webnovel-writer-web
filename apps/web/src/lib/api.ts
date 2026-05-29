@@ -43,6 +43,8 @@ import type {
   ReferenceCorpusList,
   ReferenceSearchResult,
   ReferenceSearchResponse,
+  DeconstructionRunPublic,
+  DeconstructionRunStartResponse,
 } from "@novelcraft/shared-schemas";
 
 // Re-export types for consumers
@@ -91,6 +93,8 @@ export type {
   ReferenceCorpusList,
   ReferenceSearchResult,
   ReferenceSearchResponse,
+  DeconstructionRunPublic,
+  DeconstructionRunStartResponse,
 };
 
 const BASE_URL = "/api/v1";
@@ -952,6 +956,33 @@ export function foundryCompose(data: FoundryComposeRequest) {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+// ---- Full-book Deconstruction ----
+
+export function startFullBookDeconstruct(
+  corpusId: string,
+  targetGenre?: string,
+  preferences?: Record<string, unknown>,
+) {
+  return request<DeconstructionRunStartResponse>(
+    "/agents/foundry/deconstruct/fullbook",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        corpus_id: corpusId,
+        target_genre: targetGenre || "",
+        preferences: preferences || {},
+        use_embedding: false,
+      }),
+    },
+  );
+}
+
+export function getDeconstructionRun(runId: string) {
+  return request<DeconstructionRunPublic>(
+    `/agents/foundry/deconstruct-runs/${runId}`,
+  );
 }
 
 // ---- Reference Corpus ----

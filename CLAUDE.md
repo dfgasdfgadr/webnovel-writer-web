@@ -2,7 +2,7 @@
 
 ## 项目
 
-自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：新**Phase2**（旧：Phase 0–8 + 新 Phase 1 已完成）。
+自托管 AI 长篇网文创作平台（NovelCraft）。当前阶段：新**Phase3**（旧：Phase 0–8 + 新 Phase 1–2 已完成）。
 
 ## 新 Phase 启动顺序
 
