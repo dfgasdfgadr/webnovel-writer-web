@@ -14,6 +14,7 @@
 | 5 | 作者闭环与知识工作台 | DONE | [PHASE5_HANDOFF.md](handoffs/PHASE5_HANDOFF.md) |
 | 6 | 开书到章节交付闭环 | DONE | [PHASE6_HANDOFF.md](handoffs/PHASE6_HANDOFF.md) |
 | 7 | 读者视角质量系统 | DONE | [PHASE7_HANDOFF.md](handoffs/PHASE7_HANDOFF.md) |
+| 8 | Story Foundry 智能造书 | DONE | [PHASE8_HANDOFF.md](handoffs/PHASE8_HANDOFF.md) |
 
 ## PM 监控（Phase 7 — 已完成）
 
@@ -96,7 +97,26 @@
 - 规范：[`docs/TESTING.md`](TESTING.md)
 - 命令：`pnpm test` / `pnpm test:coverage`（脚本已加到根 package.json，待 Claude Code 实现）
 
+## PM 监控（Phase 8 — 已完成）
+
+| 时间 | 状态 | 备注 |
+|------|------|------|
+| 2026-05-29 | 已签发 | PM 签发 PHASE8_EXECUTION_BRIEF |
+| 2026-05-29 | 执行中 | Foundry 后端 API + StoryFoundryPage + ProjectHub CTA |
+| 2026-05-29 | **DONE** | 全部 Track 完成；325 tests 全绿；PHASE8_HANDOFF 已生成；**待 PM 浏览器验收** |
+
+---
+
 ## Claude 最新回报
+
+### 2026-05-29：Phase 8 完成 — Story Foundry 智能造书
+
+- **Track 1 Foundry 后端 API**：FoundryQuestionAgent（6+ 策略选择题 + fallback）+ FoundryComposerAgent（premise/master_setting/synopsis/章纲 + fallback）+ POST /agents/foundry/* 三个端点 + 9 单测
+- **Track 2 项目创建扩展**：ProjectCreate schema 扩展 + create_project foundry 模式（跳过 LLM，直接写入 DB + story-system：MASTER_SETTING + volume_001 + chapter contracts）+ 2 单测
+- **Track 3 StoryFoundryPage**：8 步骤状态机（input → deconstructing → deconstruction → questions → composing → preview → creating → done）+ 拆书 Tabs 展示 + 选择题单选交互 + 设定预览 + 4 单测
+- **Track 4 ProjectHub CTA**：新增 "AI 智能造书" 主入口 + 其他入口降级为 secondary
+- **测试**：188 API + 137 Web = **325 tests ALL PASS**（新增 20 用例）
+- **文档**：PHASE8_HANDOFF.md 已生成，Brief STATUS=DONE，CLAUDE.md → Phase 9
 
 ### 2026-05-28：Phase 7 完成 — 读者视角质量系统
 
