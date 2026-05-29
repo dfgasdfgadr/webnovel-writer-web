@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
 def _get_encrypt_key() -> bytes:
-    raw = os.environ.get("NOVELCRAFT_ENCRYPT_KEY", settings.jwt_secret)
+    raw = settings.encrypt_key or settings.jwt_secret
     return base64.urlsafe_b64encode(raw.encode("utf-8").ljust(32, b"\x00")[:32])
 
 

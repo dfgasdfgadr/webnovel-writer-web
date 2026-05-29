@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_base_url: str = "https://api.openai.com/v1"
     llm_model: str = "gpt-4o"
+    encrypt_key: str = ""
     novelcraft_data_root: str = "./data/projects"
     plugins_dir: str = ""  # empty = auto-compute from repo root
 
