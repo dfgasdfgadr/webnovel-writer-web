@@ -24,6 +24,7 @@ import { SummariesPage } from "@/pages/SummariesPage";
 import { PluginManager } from "@/pages/PluginManager";
 import { WorkflowView } from "@/pages/WorkflowView";
 import { PromptWorkshop } from "@/pages/PromptWorkshop";
+import { StoryFoundryPage } from "@/pages/StoryFoundryPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +75,7 @@ export default function App() {
                 }
               >
                 <Route path="/" element={<ProjectHub />} />
+                <Route path="/projects/new" element={<StoryFoundryPage />} />
                 <Route path="/projects/new/wizard" element={<DeepInitWizard />} />
                 <Route path="/projects/new/chat" element={<InitChatPage />} />
                 <Route path="/projects/new/deconstruct" element={<DeconstructPage />} />

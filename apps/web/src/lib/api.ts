@@ -841,3 +841,98 @@ export function resetProjectPrompt(projectId: string, scope: string, key: string
     { method: "POST" },
   );
 }
+
+// ---- Story Foundry ----
+
+export interface FoundryDeconstruction {
+  golden_chapters: string[];
+  hooks: string[];
+  character_patterns: string[];
+  world_patterns: string[];
+  pacing: string[];
+  transferable_patterns: string[];
+  red_flags: string[];
+}
+
+export interface FoundryDeconstructRequest {
+  book_title: string;
+  sample_chapters: string[];
+}
+
+export interface FoundryDeconstructResponse {
+  status: string;
+  deconstruction: FoundryDeconstruction;
+  fallback: boolean;
+}
+
+export interface QuestionOption {
+  id: string;
+  label: string;
+  description: string;
+  effects: {
+    protagonist?: Record<string, unknown>;
+    plot_bias?: Record<string, unknown>;
+    pacing?: Record<string, unknown>;
+  };
+}
+
+export interface QuestionSet {
+  id: string;
+  title: string;
+  description: string;
+  options: QuestionOption[];
+}
+
+export interface FoundryQuestionsRequest {
+  deconstruction: FoundryDeconstruction;
+  preferences?: Record<string, unknown>;
+}
+
+export interface FoundryQuestionsResponse {
+  question_sets: QuestionSet[];
+  fallback: boolean;
+}
+
+export interface FoundryComposeRequest {
+  book_title: string;
+  deconstruction: FoundryDeconstruction;
+  selections: Record<string, string>;
+  custom_notes?: string;
+}
+
+export interface FoundryComposeResponse {
+  premise: Record<string, unknown>;
+  master_setting: Record<string, unknown>;
+  synopsis: Record<string, unknown>;
+  first_volume_chapters: Array<{
+    chapter_num: number;
+    title: string;
+    outline: string;
+    must_cover_nodes: string[];
+    forbidden_zones: string[];
+    key_characters: Array<{ name: string; role_in_chapter: string }>;
+    target_words: number;
+  }>;
+  fallback: boolean;
+}
+
+export function foundryDeconstruct(data: FoundryDeconstructRequest) {
+  return request<FoundryDeconstructResponse>("/agents/foundry/deconstruct", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function foundryQuestions(data: FoundryQuestionsRequest) {
+  return request<FoundryQuestionsResponse>("/agents/foundry/questions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export function foundryCompose(data: FoundryComposeRequest) {
+  return request<FoundryComposeResponse>("/agents/foundry/compose", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}

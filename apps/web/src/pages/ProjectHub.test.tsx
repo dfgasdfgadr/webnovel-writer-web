@@ -59,6 +59,7 @@ describe("ProjectHub — import UI", () => {
   it("renders onboarding entry links", async () => {
     renderPage();
     await waitFor(() => {
+      expect(screen.getAllByText("AI 智能造书").length).toBeGreaterThan(0);
       expect(screen.getAllByText("对话开书").length).toBeGreaterThan(0);
       expect(screen.getAllByText("拆书").length).toBeGreaterThan(0);
     });
